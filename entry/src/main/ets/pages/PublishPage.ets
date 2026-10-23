@@ -13,6 +13,12 @@ export struct PublishPage {
   @Local error: string = '';
   @Local step: number = 1;
   private stack: NavPathStack = new NavPathStack();
+  example(): void {
+    this.kind = 'lost'; this.category = '证件卡片';
+    this.title = '寻找蓝色校园卡套'; this.location = '图书馆一楼';
+    this.description = '蓝色卡套，背面贴有白色贴纸；这是用于课程演示的虚构信息。';
+    this.contact = '校园服务台转接（演示）'; this.error = ''; this.step = 1;
+  }
   back(): void {
     if (this.busy) { return; }
     if (this.step === 2) { this.step = 1; this.error = ''; } else { this.stack.pop(); }
@@ -43,6 +49,10 @@ export struct PublishPage {
           Text('—').fontColor(Colors.muted)
           Text('2  线索与联系').fontSize(13).fontColor(this.step === 2 ? Colors.green : Colors.muted).fontWeight(FontWeight.Bold)
         }.width('100%').padding({ left: 20, right: 20, bottom: 20 })
+        Row() {
+          Text('首次使用？可参考一份填写示例').fontSize(11).fontColor(Colors.muted).layoutWeight(1)
+          Button('使用虚构示例').fontSize(11).height(30).fontColor(Colors.green).backgroundColor(Colors.soft).onClick(() => this.example())
+        }.width('100%').padding({ left: 20, right: 20, bottom: 10 }).enabled(!this.busy)
         Scroll() {
           Column({ space: 15 }) {
             if (this.step === 1) {
