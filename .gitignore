@@ -1,0 +1,22 @@
+.hvigor/
+.idea/
+oh_modules/
+**/build/
+**/.preview/
+outputs/
+verification/
+mock/runtime/
+*.log
+local.properties
+oh-package-lock.json5
+
+# Keep personal course submissions outside this public repository.
+*.docx
+*.pdf
+*.bundle
+*.zip
+*.hap
+*.p12
+*.p7b
+*.key
+*.pem
