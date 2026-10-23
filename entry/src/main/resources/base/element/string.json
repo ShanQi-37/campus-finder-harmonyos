@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "拾光校园"
+    },
+    {
+      "name": "module_desc",
+      "value": "校园失物招领与寻回数据可视化"
+    }
+  ]
+}
