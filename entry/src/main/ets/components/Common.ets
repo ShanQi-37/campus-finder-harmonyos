@@ -42,18 +42,18 @@ export struct StatePanel {
   @Param emptyText: string = '暂时没有匹配的信息';
   @Event onRetry: () => void = () => {};
   build() {
-    Column({ space: 14 }) {
+    Column({ space: 10 }) {
       if (this.phase === 'loading') {
         LoadingProgress().width(40).height(40).color(Colors.green)
         Text('正在寻找校园里的线索…').fontSize(14).fontColor(Colors.muted)
       } else {
-        Text(this.phase === 'error' ? '!' : '⌕').fontSize(40).fontColor(Colors.green)
-        Text(this.phase === 'error' ? '暂时未能加载' : this.emptyText).fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
+        Text(this.phase === 'error' ? '!' : '⌕').fontSize(30).fontColor(Colors.green)
+        Text(this.phase === 'error' ? '暂时未能加载' : this.emptyText).fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
         Text(this.phase === 'error' ? this.error : '换个关键词或分类试试，也可以发布一条信息。')
-          .fontSize(13).fontColor(Colors.muted).textAlign(TextAlign.Center).padding({ left: 20, right: 20 })
-        Button(this.phase === 'error' ? '重新加载' : '刷新信息').height(40).fontColor('#FFFFFF').backgroundColor(Colors.green).onClick(() => this.onRetry())
+          .fontSize(12).maxLines(2).fontColor(Colors.muted).textAlign(TextAlign.Center).padding({ left: 20, right: 20 })
+        Button(this.phase === 'error' ? '重新加载' : '刷新信息').height(36).fontColor('#FFFFFF').backgroundColor(Colors.green).onClick(() => this.onRetry())
       }
-    }.width('100%').padding({ top: 45, bottom: 45 }).justifyContent(FlexAlign.Center)
+    }.width('100%').padding({ top: 16, bottom: 16 }).justifyContent(FlexAlign.Center)
   }
 }
 @ComponentV2

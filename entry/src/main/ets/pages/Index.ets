@@ -12,13 +12,18 @@ struct Index {
   @Local model: FeedModel = new FeedModel();
   @Local notice: string = '';
   private stack: NavPathStack = new NavPathStack();
+  private noticeTimer: number = -1;
   aboutToAppear(): void { this.model.load(); }
-  aboutToDisappear(): void { this.model.cancel(); }
+  aboutToDisappear(): void { this.model.cancel(); if (this.noticeTimer >= 0) { clearTimeout(this.noticeTimer); } }
   open(name: string, param: string = ''): void {
     this.stack.pushPath({ name: name, param: param, onPop: (info: PopInfo) => {
       const result = info.result as ReturnResult;
       if (result?.changed) { this.model.load(); }
-      if (result?.published) { this.notice = '发布成功，新的线索已经送达。'; }
+      if (result?.published) {
+        this.notice = '发布成功，新的线索已经送达。';
+        if (this.noticeTimer >= 0) { clearTimeout(this.noticeTimer); }
+        this.noticeTimer = setTimeout(() => { this.notice = ''; this.noticeTimer = -1; }, 4500);
+      }
     } });
   }
   @Builder
