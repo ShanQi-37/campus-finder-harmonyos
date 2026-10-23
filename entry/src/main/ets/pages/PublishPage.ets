@@ -11,7 +11,16 @@ export struct PublishPage {
   @Local contact: string = '校园服务台转接（演示）';
   @Local busy: boolean = false;
   @Local error: string = '';
+  @Local step: number = 1;
   private stack: NavPathStack = new NavPathStack();
+  back(): void {
+    if (this.busy) { return; }
+    if (this.step === 2) { this.step = 1; this.error = ''; } else { this.stack.pop(); }
+  }
+  next(): void {
+    if (this.title.trim().length < 2 || this.location.trim().length < 2) { this.error = '标题和地点都至少填写 2 个字。'; return; }
+    this.error = ''; this.step = 2;
+  }
   async submit(): Promise<void> {
     if (this.busy) { return; }
     if (this.title.trim().length < 2 || this.location.trim().length < 2 || this.description.trim().length < 8 || this.contact.trim().length < 2) {
@@ -28,9 +37,15 @@ export struct PublishPage {
   build() {
     NavDestination() {
       Column() {
-        PageHeader({ title: '发布信息', subtitle: '写下线索，让物品更快回家', back: true, onBack: () => { if (!this.busy) { this.stack.pop(); } } })
+        PageHeader({ title: '发布信息', subtitle: '写下线索，让物品更快回家', back: true, onBack: () => this.back() })
+        Row({ space: 12 }) {
+          Text('1  基本信息').fontSize(13).fontColor(this.step === 1 ? Colors.green : Colors.muted).fontWeight(FontWeight.Bold)
+          Text('—').fontColor(Colors.muted)
+          Text('2  线索与联系').fontSize(13).fontColor(this.step === 2 ? Colors.green : Colors.muted).fontWeight(FontWeight.Bold)
+        }.width('100%').padding({ left: 20, right: 20, bottom: 20 })
         Scroll() {
           Column({ space: 15 }) {
+            if (this.step === 1) {
             Row({ space: 12 }) {
               ChoiceChip({ label: '我丢了 · 寻物', selected: this.kind === 'lost', onSelect: () => { this.kind = 'lost'; } })
               ChoiceChip({ label: '我捡到 · 招领', selected: this.kind === 'found', onSelect: () => { this.kind = 'found'; } })
@@ -45,17 +60,23 @@ export struct PublishPage {
             TextInput({ placeholder: '例如：图书馆捡到一张校园卡', text: this.title }).height(44).fontSize(14).maxLength(36).backgroundColor('#FFFFFF').onChange((value: string) => { this.title = value; })
             this.label('遗失或拾取地点')
             TextInput({ placeholder: '请写明楼栋、楼层等具体线索', text: this.location }).height(44).fontSize(14).maxLength(30).backgroundColor('#FFFFFF').onChange((value: string) => { this.location = value; })
+            } else {
             this.label('物品描述')
             TextArea({ placeholder: '描述颜色、外观等特征，至少 8 个字', text: this.description }).height(108).fontSize(14).maxLength(300).backgroundColor('#FFFFFF').onChange((value: string) => { this.description = value; })
             this.label('联系指引')
             TextInput({ text: this.contact, placeholder: '建议通过校园服务台核实' }).height(44).fontSize(14).maxLength(60).backgroundColor('#FFFFFF').onChange((value: string) => { this.contact = value; })
             Text('请勿发布完整证件号码、密码等信息。当前为课程演示，请使用虚构内容。').fontSize(12).fontColor(Colors.muted).lineHeight(20)
-            if (this.error.length) { Text(this.error).fontColor('#B54837').fontSize(13).width('100%') }
-            Button(this.busy ? '正在发布…' : '发布到失物广场').width('100%').height(48).backgroundColor(Colors.green).enabled(!this.busy).onClick(() => { this.submit(); })
+            }
           }.width('100%').padding({ left: 20, right: 20, bottom: 30 })
         }.layoutWeight(1).scrollBar(BarState.Off).enabled(!this.busy)
+        Column({ space: 10 }) {
+          if (this.error.length) { Text(this.error).fontColor('#B54837').fontSize(13).width('100%') }
+          Button(this.step === 1 ? '下一步 · 填写线索' : (this.busy ? '正在发布…' : '发布到失物广场'))
+            .width('100%').height(48).backgroundColor(Colors.green).enabled(!this.busy)
+            .onClick(() => { if (this.step === 1) { this.next(); } else { this.submit(); } })
+        }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 24 }).backgroundColor(Colors.paper)
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; })
-      .onBackPressed(() => { if (!this.busy) { this.stack.pop(); } return true; })
+      .onBackPressed(() => { this.back(); return true; })
   }
 }

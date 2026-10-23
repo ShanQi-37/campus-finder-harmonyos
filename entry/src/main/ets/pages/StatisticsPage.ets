@@ -1,12 +1,13 @@
 import { Statistics, emptyStatistics } from '../model/Models';
 import { Api } from '../service/Api';
-import { Colors, PageHeader, StatePanel } from '../components/Common';
+import { ChoiceChip, Colors, PageHeader, StatePanel } from '../components/Common';
 import { CategoryChart, RecoveryChart, TrendChart } from '../components/Charts';
 @ComponentV2
 export struct StatisticsPage {
   @Local data: Statistics = emptyStatistics();
   @Local phase: string = 'loading';
   @Local error: string = '';
+  @Local chart: string = 'overview';
   private stack: NavPathStack = new NavPathStack();
   private generation: number = 0;
   async load(): Promise<void> {
@@ -41,6 +42,11 @@ export struct StatisticsPage {
         if (this.phase !== 'ready') {
           StatePanel({ phase: this.phase, error: this.error, emptyText: '还没有可统计的互助记录', onRetry: () => { this.load(); } })
         } else {
+          Row({ space: 10 }) {
+            ChoiceChip({ label: '寻回概览', selected: this.chart === 'overview', onSelect: () => { this.chart = 'overview'; } })
+            ChoiceChip({ label: '类别分布', selected: this.chart === 'category', onSelect: () => { this.chart = 'category'; } })
+            ChoiceChip({ label: '七日趋势', selected: this.chart === 'trend', onSelect: () => { this.chart = 'trend'; } })
+          }.width('100%').padding({ left: 20, right: 20, bottom: 15 })
           Scroll() {
             Column({ space: 16 }) {
               Grid() {
@@ -48,9 +54,9 @@ export struct StatisticsPage {
                 GridItem() { this.metric('待寻回', this.data.open) }
                 GridItem() { this.metric('已寻回', this.data.resolved) }
               }.columnsTemplate('1fr 1fr 1fr').columnsGap(10).height(88).width('100%')
-              RecoveryChart({ data: this.data })
-              CategoryChart({ points: this.data.categories })
-              TrendChart({ points: this.data.trend })
+              if (this.chart === 'overview') { RecoveryChart({ data: this.data }) }
+              else if (this.chart === 'category') { CategoryChart({ points: this.data.categories }) }
+              else { TrendChart({ points: this.data.trend }) }
               Text('统计来自当前校园演示记录，发布和寻回后会重新计算。').fontSize(11).fontColor(Colors.muted).lineHeight(19)
             }.width('100%').padding({ left: 20, right: 20, bottom: 30 })
           }.layoutWeight(1).scrollBar(BarState.Off)
