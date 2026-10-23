@@ -1,4 +1,4 @@
-import { CATEGORIES } from '../model/Models';
+import { CATEGORIES, Item } from '../model/Models';
 import { FeedModel } from '../model/FeedModel';
 import { ChoiceChip, Colors, ItemCard, StatePanel } from './Common';
 @ComponentV2
@@ -35,9 +35,9 @@ export struct FeedContent {
         StatePanel({ phase: this.model.phase, error: this.model.error, onRetry: () => { this.model.load(); } }).layoutWeight(1)
       } else {
         List({ space: 12 }) {
-          ForEach(this.model.items, (item: import('../model/Models').Item) => {
+          ForEach(this.model.items, (item: Item) => {
             ListItem() { ItemCard({ item: item, onOpen: (id: string) => this.onOpen(id) }) }
-          }, (item: import('../model/Models').Item) => item.id)
+          }, (item: Item) => item.id)
           ListItem() {
             Text('共 ' + this.model.items.length + ' 条 · 更新于 ' + this.model.updated).fontSize(11).fontColor(Colors.muted).width('100%').textAlign(TextAlign.Center).padding(12)
           }
