@@ -8,6 +8,7 @@ verification/
 mock/runtime/
 *.log
 local.properties
+screenshots/ide/
 oh-package-lock.json5
 
 # Keep personal course submissions outside this public repository.
