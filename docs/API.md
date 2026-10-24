@@ -1,36 +1,37 @@
-# HTTP 接口
+# 第二版 HTTP 接口和状态机
 
-默认地址 `http://127.0.0.1:4524`。服务独立于 ArkUI 页面运行，通过 `@kit.NetworkKit.http` 请求，响应为 JSON。所有示例数据均为虚构内容。
+默认 `http://127.0.0.1:4524`；独立Node服务，ArkUI通过NetworkKit请求。统一 `{code:0,message:"ok",data:...}`，失败HTTP400/403/404/409/413/500/503，message可读；客户端检查状态、解析和必要结构，finally销毁HTTP对象。
 
-统一响应：`{ "code": 0, "message": "ok", "data": ... }`。HTTP 非 2xx 表示失败，code 对应 HTTP 状态码。客户端会处理连接失败、超时、非 2xx、JSON 解析失败及列表/统计结构缺失，并在 finally 中销毁请求对象。
+请求头 `X-Demo-User` 取demo-user/peer-01/peer-02，默认demo-user。固定虚构角色不构成身份认证，仅本机单进程课程演示。联系和证明均使用虚构内容。
 
-| 方法 | 路径 | 作用 |
+| 方法 | 路径 | 功能 |
 | --- | --- | --- |
-| GET | `/health` | 检查服务状态 |
-| GET | `/api/items` | 列表与组合筛选 |
-| GET | `/api/items/:id` | 详情；不存在返回 404 |
-| POST | `/api/items` | 发布；成功返回 201 |
-| POST | `/api/items/:id/resolve` | 确认本人记录已寻回；重复操作幂等 |
-| GET | `/api/statistics` | 全部记录的动态聚合统计 |
+| GET | /health | 服务版本与记录数量 |
+| GET | /api/items | 列表、搜索、组合筛选、分页 |
+| GET | /api/items/:id | 详情、联系可见性、收藏、动态记录 |
+| POST | /api/items | 新建，201；requestId支持同身份重试幂等 |
+| POST | /api/items/:id/update | 编辑本人open启事 |
+| POST | /api/items/:id/resolve | 本人确认寻回，幂等 |
+| POST | /api/items/:id/withdraw | 本人撤回，取消待核对申请 |
+| POST | /api/items/:id/restore | 本人恢复已撤回启事 |
+| POST | /api/items/:id/favorite | {saved:boolean}，显式幂等收藏 |
+| POST | /api/items/:id/claims | 他人提交认领或线索，201 |
+| GET | /api/claims?direction=received或sent | 当前身份收到/发出的申请 |
+| POST | /api/claims/:id/accept或reject或cancel | 发布者接受/拒绝，申请者取消 |
+| GET | /api/statistics?days=7或14或30&category=all或类别 | 动态聚合 |
 
-列表 query：kind 为 all/lost/found；category 为 all 或“证件卡片／电子数码／生活用品／学习文具”；keyword 匹配标题、描述、地点；owner 为空时不限，demo-user 表示演示身份。筛选由服务端完成。响应 data 为 `{items: Item[], total: number}`。
+列表参数kind=all/lost/found，category=all或四类别，keyword匹配标题/地点/描述（最多80字），owner可为空，status=all/open/resolved/withdrawn，sort=latest/oldest，saved=true/false，page正整数，pageSize=1..100。客户端每页2条，接口默认100；返回items,total,page,pageSize,hasMore。撤回启事仅本人管理列表可见，他人访问详情404。
 
-Item 字段：id、title、category、kind、location、description、owner、status、contact、occurredAt、createdAt。status 为 open/resolved；createdAt 为 ISO 时间，occurredAt 为上海时区 YYYY-MM-DD 日期。
+发布/编辑字段：title2–36字、location2–30字、description8–300字、contact2–60字、kind、category、occurredAt（可选，默认今日，合法YYYY-MM-DD且不得晚于上海当日）、requestId（可选≤80字）。服务端生成UUID与createdAt。编辑保留id/owner/createdAt；已有待核对申请时禁止改变类型/分类，防止证据指向变化。其余线索可补充，核对时以当前启事为准。
 
-发布请求包含 title（2—36字）、category、kind、location（2—30字）、description（8—300字）、contact（2—60字）。前后端均校验；服务端固定使用演示身份 demo-user，创建 UUID 和时间，写入本地 JSON。此身份用于课堂演示，不代表登录认证或生产环境权限保障。
+Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPending,claimCount,contactVisible。联系指引仅所属身份或已接受申请者可见；其他响应不返回原联系内容。
 
-统计 data 字段：total、open、resolved、recoveryRate、categories、trend、updatedAt。categories 为 `{label,count}[]`；trend 为含今日在内近七日（上海时区）的发布数量，日期 label 为 MM-DD。每条物品对应一条启事，寻回率为 `round(resolved / total * 100)`；total=0 时返回0。类别计数、趋势与寻回数均从同一份当前记录计算。
+申请字段proof8–240字、contact2–60字。Claim含id,itemId,itemTitle,kind,category,sender,owner,senderName,ownerName,proof,contact,status,createdAt,updatedAt；只在当前身份参与的申请列表中返回。不能申请本人或结束的启事，同身份同物品只允许一份pending；拒绝/取消后可重提。
 
-发布或确认寻回后，页面返回时重新请求；进入统计页或点击刷新也会重新聚合。前端不自行伪造成功状态或随机图表数值。
+启事：open→resolved；open→withdrawn→open。已寻回不再编辑/撤回/恢复。申请：pending→accepted/rejected/cancelled。接受仅由启事所属身份执行，并在同一快照中将物品设resolved、当前申请accepted、其他pending设rejected；直接寻回或撤回将pending设cancelled。相同目标的重复处理返回原结果，冲突目标409。必须实际核实并交接后才在界面确认。
 
-## 容错测试
+统计按createdAt上海日期筛选含今日7/14/30日，按category组合过滤，withdrawn不计入有效总量；恢复后重新计入原发布日。total=open+resolved=lost+found=sum(categories)=sum(trend)。recoveryRate=round(resolved/total*100)，无数据为0；pendingClaims只计所选有效启事的pending，withdrawn独立返回。趋势表示当前有效启事在各发布日的数量，不是不可变的历史快照。
 
-仅监听本机回环地址的 `/__test/mode` 接口用于可重复测试，不在产品界面暴露。POST JSON `{"mode":"normal"}` 可切换 normal/error/empty/slow/malformed；分别为正常、GET返回503、GET返回空数据、2.5秒延迟、GET返回无效JSON。恢复时务必切回 normal。测试模式不删除已保存记录。
+存储 `mock/runtime/items.json`：`{version:2,items,claims,favorites}`。兼容旧数组，保留记录并映射旧的其他虚构身份至peer-01。每次完整快照写同目录临时文件→重命名→替换内存；任何写入失败500且内存不变。非对象JSON、异常ID编码、超大请求均拒绝。单进程中读改写同步，不支持多进程同时写文件。
 
-服务运行数据保存在 mock/runtime/items.json，已排除 Git 与课程源码包。无该文件时自动生成12条演示记录；测试程序使用独立临时文件验证重启持久化，不改动演示服务数据。
-
-服务未实现真实账户、图片上传、审核或多进程数据库锁，限本机课程演示使用。
-
-## 一致性与请求校验
-
-2026年10月24日复核后，所有请求体要求为JSON对象，null、数组及字符串等返回400；物品ID中无效的百分号编码也返回400。发布和寻回先把完整新快照写入同目录临时文件，再重命名替换数据文件，成功后才更新内存。写入失败返回500，列表与统计保持原样，避免出现“接口提示失败但记录已变更”的情况。已寻回记录重复确认直接返回原状态。此设计保证单进程课堂演示中的写入一致性，不代表多进程数据库事务。
+仅本机 `/__test/mode` POST `{mode:"normal"}` 支持normal/error(GET503)/empty/slow(2.5秒)/malformed(GET错误JSON)；界面不暴露，不删除已有数据。演示后恢复normal。接口测试使用隔离临时目录，不改变实际演示数据。

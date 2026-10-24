@@ -1,64 +1,56 @@
-# 拾光校园
+# 拾光校园 · Campus Finder
 
-基于 HarmonyOS 的校园失物招领与寻回数据可视化课程项目。面向学生提供失物广场、物品详情、信息发布、我的记录和互助统计五个业务页面。
+原生 HarmonyOS 校园失物招领与寻回数据可视化课程项目。第二版覆盖完整的本机演示业务：发布与编辑启事、组合搜索、收藏、认领或提供线索、双方核对交接、撤回恢复、个人记录和动态统计。
 
-选题状态：已确定开发方向，尚待本人在班级登记并确认不重复。
+![新版原生界面](screenshots/v2/18-published.png)
 
-## 开发范围
+## 功能
 
-- 原生 ArkTS 与 ArkUI，状态管理使用 V2 装饰器。
-- Navigation 管理页面栈，详情页接收物品 ID，发布成功后返回并刷新数据。
-- 独立 Node.js Mock HTTP 服务，支持列表、筛选、详情、发布、确认寻回和统计。
-- 网络加载、错误、空数据、重试以及请求过期保护。
-- 可复用卡片、状态面板和图表组件；图表绑定服务端实时聚合数据。
-- 在 DevEco Studio Previewer 验证完整操作过程。
-
-## 过程与署名
-
-工程由 Codex 根据课程项目需求协助实现。保留经隐私处理的真实阶段 Git 记录；报告仅记录已实现功能和实际验证结果。提交者应阅读代码并能够解释设计、状态更新与接口处理。
-
-## 评分对应
-
-| 评分项 | 实现目标 |
-| --- | --- |
-| 选题与需求 10 | 明确校园场景、角色和业务流程，班级登记由本人确认 |
-| UI 与容器 20 | Row、Column、List、Grid、Scroll 响应式布局 |
-| 自定义组件与状态 20 | ComponentV2、Local、Param、Event、ObservedV2、Trace |
-| Navigation 15 | 五页面导航、物品 ID 传递、返回栈与发布结果处理 |
-| 网络交互 15 | 真实 HTTP 请求与加载、失败、空数据处理 |
-| Git 10 | 从初始化开始分阶段提交，附真实提交截图 |
-| 代码与文档 10 | 分层、接口说明、运行指南、学校格式报告 |
-| 数据可视化 +10 | 类别柱状图、七日趋势图、寻回率环图，操作后重新请求统计 |
-
-源码和报告为课程演示用途，Mock 物品与联系人均为虚构数据。
+- 七个 Navigation 业务页面：失物广场、线索详情、两步发布/编辑、我的校园、互助统计、申请表单、认领与线索中心。
+- 服务端组合筛选：类型、类别、关键词、状态、排序；分页按钮便于访问全部记录。
+- 启事生命周期：待寻回 → 已寻回；待寻回 → 已撤回 → 恢复待寻回。仅所属演示身份能管理。
+- 认领闭环：他人提交核对说明 → 发布者收到 → 核实交接并接受/拒绝；申请者可取消待处理申请。同一物品通过一份申请后自动关闭其余待处理申请。
+- 收藏按演示身份持久化，申请双方才可查看申请联系指引；启事联系指引在认领通过后对申请者解锁。
+- 三种 API 驱动图表：寻回率环图、类别柱状图、7/14/30日趋势折线；支持类别和日期范围组合筛选。
+- 加载、失败、空数据、重试、表单校验、防重复提交、过期请求保护；JSON快照先落盘后替换内存，磁盘失败保持原状态。
+- 原创本地SVG物品插画和校园主题插画，ArkUI V2统一组件与配色。
 
 ## 运行
 
-环境：DevEco Studio 26.0，已安装 HarmonyOS API 26 SDK 与 Previewer。工程未依赖第三方 ArkUI 或 Node 软件包。Node.js 18+ 可启动 Mock；本机 DevEco 自带 Node 24.14.1。
+环境：DevEco Studio 26.0，HarmonyOS API 26 SDK、Previewer；Node.js18+（本机 DevEco 自带24.14.1）。无第三方 ArkUI/Node 依赖。
 
 ```powershell
-# 在工程目录运行，窗口保持开启
+# 工程目录，保持服务运行
 powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
-# 另一个窗口编译；脚本会兼容中文父目录
+# 另一窗口编译
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-# HTTP 测试（默认使用本机 DevEco Node）
-& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs
+# 真实HTTP测试，两个文件均应执行
+& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs
 ```
 
-DevEco 路径不同时，在脚本参数中指定 `-DevEcoPath`。使用 UTF-8 编码的源码。Hvigor 不支持中文工程路径，编译脚本将工程复制到临时英文目录，完成后把 HAP 保存到 outputs；原始源码不变。要进行 Previewer 调试，请在 IDE 打开脚本输出的英文目录，选择 Index.ets，并点击右侧眼睛图标。先启动 Mock，再打开 Previewer，失败时可以点击页面上的“重新加载”。预览器不需要真机、模拟器或应用签名。
+脚本支持 `-DevEcoPath`。Hvigor不支持中文工程路径；构建脚本生成临时英文目录并把未签名HAP拷回outputs。用IDE打开脚本输出的英文目录，选择 `entry/src/main/ets/pages/Index.ets`，点击Previewer眼睛图标。先启动Mock；连接失败点“重新加载”。Previewer无需真机、完整模拟器或签名。
 
-默认 HTTP 地址为 service/Api.ets 的 BASE_URL。本机 Previewer 直接连接127.0.0.1:4524。若另外使用完整模拟器，需用 hdc rport 映射相同端口；课程演示以 Previewer 为主。HAP 为未签名调试产物，不代表发布包。
+Previewer连接 `http://127.0.0.1:4524`。其他设备需另行配置端口映射，未纳入本次验证。Mock仅监听本机；未签名HAP用于构建检查。
 
-## 源码位置
+## 双角色演示
 
-- `pages`：广场、详情、两步发布、我的记录和统计页面；Navigation 集中映射。
-- `components`：物品卡片、页面标题、状态面板、筛选按钮与三种图表。
-- `model`：接口模型、ObservedV2/Trace 列表状态与请求序号。
-- `service`：NetworkKit 请求、超时、状态码和解析异常处理。
-- `mock`：本机 HTTP 服务、JSON 持久化、动态统计和集成测试。
+“我的”提供校园、互助、志愿三个固定虚构身份，切换后请求头 `X-Demo-User` 随之更新。这是业务演示工具，**不是真实登录认证**。用校园同学申请 `seed-1` 校园卡，换互助同学在收到的申请中核对并确认，换回申请者查看结果与联系指引。新环境自动生成12条虚构记录；本机已执行操作，数量会不同。
 
-接口与边界详见 [API.md](docs/API.md)，复现操作详见 [DEMO.md](docs/DEMO.md)，逐项要求与验证状态见 [ASSESSMENT.md](docs/ASSESSMENT.md)。框架与 API 说明以华为官方文档和本机 SDK 为依据；UI 仅参考 FreeUID 的应用分类与卡片信息组织思路，页面、矢量图标与业务代码为本项目新写内容。
+数据保存 `mock/runtime/items.json`（不入Git）。第一版数组自动兼容为第二版items/claims/favorites快照；不用删除旧数据。单进程串行写入，不承诺多进程数据库事务。
 
-2026年10月24日复核优化：空结果可一键清空筛选；详情确认期间阻止提前返回；Mock拒绝非对象JSON和畸形ID，先持久化完整快照再更新内存。最新构建通过，HTTP测试8项通过、0项失败；空结果恢复已在Previewer实际复验。
+## 文档与评分
 
-学校提交源码包排除 .hvigor、.git、.idea、oh_modules 与构建缓存；原始本地仓库独立保留。公开仓库不包含个人报告、Git bundle或本机日志。
+[接口与状态机](docs/API.md) · [演示步骤](docs/DEMO.md) · [验证边界](docs/VALIDATION.md) · [要求核对](docs/ASSESSMENT.md)
+
+| 项目 | 对应实现 |
+| --- | --- |
+| UI布局与容器 | Row、Column、List、Grid、Scroll；统一卡片/插画/状态样式 |
+| 自定义组件与状态 | ComponentV2、Local、Param、Event、ObservedV2、Trace |
+| Navigation | 七页路由、ID参数、子页返回与重新请求 |
+| HTTP网络 | 持久化Mock、读取和写入、异常/空数据/重试 |
+| Git和文档 | 真实阶段提交，接口与运行文档，学校模板报告仅本地交付 |
+| 明确加分项 +10 | 真实网络动态数据可视化；三图及条件联动，不把图表数当多份加分 |
+
+课程选题登记以提交者实际登记结果为准；源码不能证明登记状态，也不承诺教师分数。工程由Codex根据课程项目需求协助实现，保留真实阶段历史。提交者应理解代码并按课程要求披露辅助使用情况。
+
+公开材料只含脱敏源码、虚构数据视口截图和处理后的历史；个人报告、提交ZIP、运行数据、日志、凭据均不上传。UI仅借鉴应用分类及信息组织思路，没有复用整套开源应用模板。项目限课堂演示，真实上线需认证、数据库并发、内容治理和校园服务对接。
