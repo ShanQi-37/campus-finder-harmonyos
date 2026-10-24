@@ -41,7 +41,7 @@ export struct TrendChart {
       }.width('100%').height(120).onAreaChange((_oldArea: Area, newArea: Area) => { this.chartWidth = Number(newArea.width); })
       Stack({ alignContent: Alignment.TopStart }) {
         ForEach(this.points, (p: CountPoint, index: number) => {
-          if (index === 0 || index === this.points.length - 1 || index % Math.ceil(this.points.length / 4) === 0) {
+          if (index === 0 || index === this.points.length - 1 || (index % Math.ceil(this.points.length / 4) === 0 && index < this.points.length - 2)) {
             Text(p.label).fontSize(9).fontColor(Colors.muted).width(42).height(16).textAlign(TextAlign.Center)
               .position({ x: 24 + index * (this.chartWidth - 48) / Math.max(1, this.points.length - 1) - 21, y: 0 })
           }
