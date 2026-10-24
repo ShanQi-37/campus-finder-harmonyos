@@ -24,86 +24,185 @@ function seed() {
     return { id: `seed-${i + 1}`, title: r[0], category: r[1], kind: r[2], location: r[3], description: r[4], owner: r[5], status: r[6], contact: '校园服务台转接（演示）', occurredAt: dateKey(created), createdAt: created.toISOString() };
   });
 }
-function aggregate(items) {
-  const total = items.length, resolved = items.filter(i => i.status === 'resolved').length;
-  return {
-    total, resolved, open: total - resolved, recoveryRate: total ? Math.round(resolved / total * 100) : 0,
-    categories: CATEGORIES.map(label => ({ label, count: items.filter(i => i.category === label).length })),
-    trend: Array.from({ length: 7 }, (_, index) => {
-      const day = dateKey(new Date(Date.now() - (6 - index) * 86400000));
-      return { label: day.slice(5), count: items.filter(i => dateKey(new Date(i.createdAt)) === day).length };
-    }), updatedAt: new Date().toISOString()
-  };
+// Demo identities deliberately model actors, not authentication or production security.
+const ACTORS = ['demo-user', 'peer-01', 'peer-02'];
+const names = { 'demo-user': '校园体验同学', 'peer-01': '互助体验同学', 'peer-02': '志愿体验同学' };
+const now = () => new Date().toISOString();
+const event = (label, at = now()) => ({ label, at });
+function normalize(item) {
+  return { ...item, owner: ACTORS.includes(item.owner) ? item.owner : 'peer-01',
+    updatedAt: item.updatedAt || item.createdAt, resolvedAt: item.resolvedAt || (item.status === 'resolved' ? item.createdAt : ''),
+    requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
+}
+function aggregate(items, claims = [], days = 7, category = 'all') {
+  const first = dateKey(new Date(Date.now() - (days - 1) * 86400000));
+  const scoped = items.filter(i => dateKey(new Date(i.createdAt)) >= first && (category === 'all' || i.category === category));
+  const active = scoped.filter(i => i.status !== 'withdrawn');
+  const total = active.length, resolved = active.filter(i => i.status === 'resolved').length;
+  return { total, resolved, open: total - resolved, recoveryRate: total ? Math.round(resolved / total * 100) : 0,
+    lost: active.filter(i => i.kind === 'lost').length, found: active.filter(i => i.kind === 'found').length,
+    withdrawn: scoped.length - total, pendingClaims: claims.filter(c => c.status === 'pending' && active.some(i => i.id === c.itemId)).length,
+    categories: CATEGORIES.map(label => ({ label, count: active.filter(i => i.category === label).length })),
+    trend: Array.from({ length: days }, (_, index) => {
+      const day = dateKey(new Date(Date.now() - (days - 1 - index) * 86400000));
+      return { label: day.slice(5), count: active.filter(i => dateKey(new Date(i.createdAt)) === day).length };
+    }), days, category, updatedAt: now() };
 }
 function createApp(options = {}) {
   const file = options.file || path.join(__dirname, 'runtime', 'items.json');
-  let items = options.memory ? seed() : (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : seed());
+  const rawStore = !options.memory && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : seed();
+  // Legacy arrays are migrated without losing any previously published records.
+  let store = Array.isArray(rawStore) ? { version: 2, items: rawStore.map(normalize), claims: [], favorites: [] }
+    : { ...rawStore, version: 2, items: rawStore.items.map(normalize) };
   let fault = 'normal';
-  // Persist a complete snapshot first; a failed disk write must not mutate live data.
-  const save = nextItems => {
-    if (options.memory) return;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const temporary = `${file}.${process.pid}.tmp`;
-    try {
-      fs.writeFileSync(temporary, JSON.stringify(nextItems, null, 2), 'utf8');
-      fs.renameSync(temporary, file);
-    } finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
+  const commit = next => {
+    if (!options.memory) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const temporary = `${file}.${process.pid}.tmp`;
+      try { fs.writeFileSync(temporary, JSON.stringify(next, null, 2), 'utf8'); fs.renameSync(temporary, file); }
+      finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
+    }
+    store = next;
   };
-  const reply = (res, status, data, message = 'ok') => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ code: status < 400 ? 0 : status, message, data })); };
+  const reply = (res, status, data, message = 'ok') => {
+    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify({ code: status < 400 ? 0 : status, message, data }));
+  };
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://127.0.0.1');
-    const started = Date.now();
-    res.on('finish', () => console.log(JSON.stringify({ time: new Date().toISOString(), method: req.method, path: url.pathname, query: url.search, status: res.statusCode, ms: Date.now() - started })));
+    const url = new URL(req.url, 'http://127.0.0.1'), started = Date.now();
+    res.on('finish', () => console.log(JSON.stringify({ time: now(), method: req.method, path: url.pathname, query: url.search, status: res.statusCode, ms: Date.now() - started })));
     try {
       let raw = '';
-      for await (const chunk of req) { raw += chunk; if (raw.length > 16384) { reply(res, 413, null, '请求过大'); return; } }
+      for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > 16384) return reply(res, 413, null, '请求过大'); }
       let body;
-      try { body = raw ? JSON.parse(raw) : {}; } catch { reply(res, 400, null, 'JSON格式错误'); return; }
-      if (body === null || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, null, '请求体必须为JSON对象');
-      // Loopback-only test control; never exposed in the application's user interface.
+      try { body = raw ? JSON.parse(raw) : {}; } catch { return reply(res, 400, null, 'JSON格式错误'); }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, null, '请求体必须为JSON对象');
       if (url.pathname === '/__test/mode' && req.method === 'POST') {
         if (!['normal', 'error', 'empty', 'slow', 'malformed'].includes(body.mode)) return reply(res, 400, null, '模式无效');
         fault = body.mode; return reply(res, 200, { mode: fault });
       }
-      if (url.pathname === '/health') return reply(res, 200, { service: 'CampusFinder', count: items.length });
+      if (url.pathname === '/health') return reply(res, 200, { service: 'CampusFinder', version: 2, count: store.items.length });
       if (!url.pathname.startsWith('/api/')) return reply(res, 404, null, '接口不存在');
+      const actor = req.headers['x-demo-user'] || 'demo-user';
+      if (!ACTORS.includes(actor)) return reply(res, 400, null, '演示身份无效');
       await new Promise(resolve => setTimeout(resolve, fault === 'slow' ? 2500 : (options.delay ?? 250)));
       if (req.method === 'GET' && fault === 'error') return reply(res, 503, null, '服务暂不可用，请稍后重试');
       if (req.method === 'GET' && fault === 'malformed') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{invalid'); }
-      const list = fault === 'empty' ? [] : items;
-      if (url.pathname === '/api/statistics' && req.method === 'GET') return reply(res, 200, aggregate(list));
+      const list = fault === 'empty' ? [] : store.items;
+      const view = item => {
+        const accepted = store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'accepted');
+        return { ...item, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
+          contactVisible: item.owner === actor || accepted, ownerName: names[item.owner],
+          saved: store.favorites.some(f => f.actor === actor && f.itemId === item.id),
+          claimCount: store.claims.filter(c => c.itemId === item.id && c.status === 'pending').length };
+      };
+      const claimView = claim => {
+        const item = store.items.find(i => i.id === claim.itemId);
+        return { ...claim, itemTitle: item.title, kind: item.kind, category: item.category, senderName: names[claim.sender], ownerName: names[claim.owner] };
+      };
+      if (url.pathname === '/api/statistics' && req.method === 'GET') {
+        const days = Number(url.searchParams.get('days') || 7), category = url.searchParams.get('category') || 'all';
+        if (![7, 14, 30].includes(days) || (category !== 'all' && !CATEGORIES.includes(category))) return reply(res, 400, null, '统计条件无效');
+        return reply(res, 200, aggregate(list, fault === 'empty' ? [] : store.claims, days, category));
+      }
+      if (url.pathname === '/api/claims' && req.method === 'GET') {
+        const direction = url.searchParams.get('direction') || 'received';
+        if (!['received', 'sent'].includes(direction)) return reply(res, 400, null, '申请方向无效');
+        const rows = (fault === 'empty' ? [] : store.claims).filter(c => (direction === 'sent' ? c.sender : c.owner) === actor);
+        return reply(res, 200, { claims: [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(claimView), pending: rows.filter(c => c.status === 'pending').length });
+      }
       if (url.pathname === '/api/items' && req.method === 'GET') {
         let result = list;
-        for (const key of ['category', 'kind', 'owner']) { const value = url.searchParams.get(key); if (value && value !== 'all') result = result.filter(i => i[key] === value); }
-        const keyword = (url.searchParams.get('keyword') || '').trim().toLowerCase();
-        if (keyword) result = result.filter(i => `${i.title} ${i.description} ${i.location}`.toLowerCase().includes(keyword));
-        return reply(res, 200, { items: [...result].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), total: result.length });
-      }
-      if (url.pathname === '/api/items' && req.method === 'POST') {
-        for (const [key, min, max] of [['title', 2, 36], ['location', 2, 30], ['description', 8, 300], ['contact', 2, 60]]) {
-          if (typeof body[key] !== 'string' || body[key].trim().length < min || body[key].trim().length > max) return reply(res, 400, null, `${key}长度应为${min}-${max}`);
+        for (const key of ['category', 'kind', 'owner', 'status']) {
+          const value = url.searchParams.get(key);
+          if (value && value !== 'all') result = result.filter(i => i[key] === value);
         }
-        if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind)) return reply(res, 400, null, '分类或类型无效');
-        const item = { id: randomUUID(), title: body.title.trim(), description: body.description.trim(), location: body.location.trim(), contact: body.contact.trim(), kind: body.kind, category: body.category, occurredAt: dateKey(), owner: 'demo-user', status: 'open', createdAt: new Date().toISOString() };
-        const nextItems = [item, ...items]; save(nextItems); items = nextItems; return reply(res, 201, item);
+        // Withdrawn notices stay in the owner's management area only.
+        if (url.searchParams.get('owner') !== actor) result = result.filter(i => i.status !== 'withdrawn');
+        if (url.searchParams.get('saved') === 'true') result = result.filter(i => store.favorites.some(f => f.actor === actor && f.itemId === i.id));
+        const keyword = (url.searchParams.get('keyword') || '').trim().toLowerCase();
+        if (keyword.length > 80) return reply(res, 400, null, '关键词最多80字');
+        if (keyword) result = result.filter(i => `${i.title} ${i.description} ${i.location}`.toLowerCase().includes(keyword));
+        const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 100);
+        if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) return reply(res, 400, null, '分页参数无效');
+        const sorted = [...result].sort((a, b) => (url.searchParams.get('sort') === 'oldest' ? 1 : -1) * a.createdAt.localeCompare(b.createdAt));
+        return reply(res, 200, { items: sorted.slice((page - 1) * pageSize, page * pageSize).map(view), total: result.length, page, pageSize, hasMore: page * pageSize < result.length });
       }
-      const match = url.pathname.match(/^\/api\/items\/([^/]+)(\/resolve)?$/);
+      const validateItem = () => {
+        for (const [key, min, max, label] of [['title', 2, 36, '标题'], ['location', 2, 30, '地点'], ['description', 8, 300, '描述'], ['contact', 2, 60, '联系指引']]) {
+          if (typeof body[key] !== 'string' || body[key].trim().length < min || body[key].trim().length > max) return `${label}长度应为${min}-${max}字`;
+        }
+        if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind)) return '分类或类型无效';
+        if (body.occurredAt !== undefined && (typeof body.occurredAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.occurredAt) || !Number.isFinite(Date.parse(body.occurredAt)) || new Date(body.occurredAt).toISOString().slice(0, 10) !== body.occurredAt || body.occurredAt > dateKey())) return '日期需为有效的YYYY-MM-DD，且不能晚于今天';
+        if (body.requestId !== undefined && (typeof body.requestId !== 'string' || body.requestId.length > 80)) return '请求标识无效';
+        return '';
+      };
+      const fields = () => ({ title: body.title.trim(), description: body.description.trim(), location: body.location.trim(), contact: body.contact.trim(), kind: body.kind, category: body.category, occurredAt: body.occurredAt || dateKey() });
+      if (url.pathname === '/api/items' && req.method === 'POST') {
+        const invalid = validateItem(); if (invalid) return reply(res, 400, null, invalid);
+        const existing = body.requestId && store.items.find(i => i.owner === actor && i.requestId === body.requestId);
+        if (existing) return reply(res, 201, view(existing));
+        const item = normalize({ ...fields(), id: randomUUID(), owner: actor, status: 'open', createdAt: now(), requestId: body.requestId || '' });
+        commit({ ...store, items: [item, ...store.items] }); return reply(res, 201, view(item));
+      }
+      const match = url.pathname.match(/^\/api\/items\/([^/]+)(?:\/(resolve|withdraw|restore|update|favorite|claims))?$/);
       if (match) {
         let id;
         try { id = decodeURIComponent(match[1]); } catch { return reply(res, 400, null, '物品标识格式错误'); }
-        const item = list.find(i => i.id === id);
-        if (!item) return reply(res, 404, null, '物品不存在或已移除');
-        if (!match[2] && req.method === 'GET') return reply(res, 200, item);
-        if (match[2] && req.method === 'POST') {
-          if (item.owner !== 'demo-user') return reply(res, 403, null, '仅可操作本人发布的信息');
-          if (item.status === 'resolved') return reply(res, 200, item);
-          const updated = { ...item, status: 'resolved' };
-          const nextItems = items.map(i => i.id === id ? updated : i);
-          save(nextItems); items = nextItems; return reply(res, 200, updated);
+        const item = list.find(i => i.id === id), action = match[2];
+        if (!item || (item.status === 'withdrawn' && item.owner !== actor)) return reply(res, 404, null, '物品不存在或已撤回');
+        if (!action && req.method === 'GET') return reply(res, 200, view(item));
+        if (req.method !== 'POST') return reply(res, 404, null, '接口不存在');
+        if (action === 'favorite') {
+          if (typeof body.saved !== 'boolean') return reply(res, 400, null, '收藏状态无效');
+          const favorites = store.favorites.filter(f => f.actor !== actor || f.itemId !== id);
+          if (body.saved) favorites.push({ actor, itemId: id });
+          commit({ ...store, favorites }); return reply(res, 200, view(item));
         }
+        if (action === 'claims') {
+          if (item.owner === actor) return reply(res, 403, null, '不能对本人启事提交申请');
+          if (item.status !== 'open') return reply(res, 409, null, '启事已结束，不能继续申请');
+          if (typeof body.proof !== 'string' || body.proof.trim().length < 8 || body.proof.trim().length > 240 || typeof body.contact !== 'string' || body.contact.trim().length < 2 || body.contact.trim().length > 60) return reply(res, 400, null, '核对说明需8-240字，联系指引需2-60字');
+          if (store.claims.some(c => c.itemId === id && c.sender === actor && c.status === 'pending')) return reply(res, 409, null, '已有待核对申请，请到申请中心查看');
+          const claim = { id: randomUUID(), itemId: id, sender: actor, owner: item.owner, proof: body.proof.trim(), contact: body.contact.trim(), status: 'pending', createdAt: now(), updatedAt: now() };
+          commit({ ...store, claims: [claim, ...store.claims] }); return reply(res, 201, claimView(claim));
+        }
+        if (item.owner !== actor) return reply(res, 403, null, '仅可操作本人发布的信息');
+        if (action === 'update') {
+          if (item.status !== 'open') return reply(res, 409, null, '仅能编辑待寻回启事');
+          const invalid = validateItem(); if (invalid) return reply(res, 400, null, invalid);
+          // Existing claims refer to the original evidence; require withdrawing first if changing type/category.
+          if ((body.kind !== item.kind || body.category !== item.category) && store.claims.some(c => c.itemId === id && c.status === 'pending')) return reply(res, 409, null, '已有待核对申请，请先处理后再更改类型或分类');
+          const updated = { ...item, ...fields(), updatedAt: now(), history: [...item.history, event('更新物品线索')] };
+          commit({ ...store, items: store.items.map(i => i.id === id ? updated : i) }); return reply(res, 200, view(updated));
+        }
+        const target = { resolve: 'resolved', withdraw: 'withdrawn', restore: 'open' }[action];
+        if (!target) return reply(res, 404, null, '接口不存在');
+        if (item.status === target) return reply(res, 200, view(item));
+        if ((action === 'restore' && item.status !== 'withdrawn') || (action !== 'restore' && item.status !== 'open')) return reply(res, 409, null, '当前状态不支持此操作');
+        const updated = { ...item, status: target, updatedAt: now(), resolvedAt: target === 'resolved' ? now() : '', history: [...item.history, event({ resolve: '发布者确认寻回', withdraw: '发布者撤回启事', restore: '重新开放启事' }[action])] };
+        const claims = store.claims.map(c => c.itemId === id && c.status === 'pending' ? { ...c, status: 'cancelled', updatedAt: now() } : c);
+        commit({ ...store, items: store.items.map(i => i.id === id ? updated : i), claims }); return reply(res, 200, view(updated));
       }
-      reply(res, 404, null, '接口不存在');
-    } catch (error) { console.error(error.message); if (!res.headersSent) reply(res, 500, null, '服务器内部错误'); else res.end(); }
+      const claimMatch = url.pathname.match(/^\/api\/claims\/([^/]+)\/(accept|reject|cancel)$/);
+      if (claimMatch && req.method === 'POST') {
+        let id;
+        try { id = decodeURIComponent(claimMatch[1]); } catch { return reply(res, 400, null, '申请标识格式错误'); }
+        const claim = store.claims.find(c => c.id === id), action = claimMatch[2];
+        if (!claim) return reply(res, 404, null, '申请不存在');
+        if ((action === 'cancel' ? claim.sender : claim.owner) !== actor) return reply(res, 403, null, '无权处理此申请');
+        const target = { accept: 'accepted', reject: 'rejected', cancel: 'cancelled' }[action];
+        if (claim.status === target) return reply(res, 200, claimView(claim));
+        if (claim.status !== 'pending') return reply(res, 409, null, '申请已处理，请刷新查看');
+        const item = store.items.find(i => i.id === claim.itemId);
+        if (item.status !== 'open') return reply(res, 409, null, '启事已结束');
+        const updated = { ...claim, status: target, updatedAt: now() };
+        const claims = store.claims.map(c => c.id === id ? updated : action === 'accept' && c.itemId === item.id && c.status === 'pending' ? { ...c, status: 'rejected', updatedAt: now() } : c);
+        const items = action === 'accept' ? store.items.map(i => i.id === item.id ? { ...i, status: 'resolved', updatedAt: now(), resolvedAt: now(), history: [...i.history, event('核对申请通过，确认完成交接')] } : i) : store.items;
+        commit({ ...store, items, claims }); return reply(res, 200, claimView(updated));
+      }
+      return reply(res, 404, null, '接口不存在');
+    } catch (error) { console.error(error.message); if (!res.headersSent) reply(res, 500, null, '保存失败或服务异常，请稍后重试'); else res.end(); }
   });
   return server;
 }
