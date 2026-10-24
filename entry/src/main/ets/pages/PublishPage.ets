@@ -116,7 +116,7 @@ export struct PublishPage {
                 TextInput({ placeholder: '请写明楼栋、楼层等线索', text: this.location }).height(42).fontSize(13).maxLength(30).backgroundColor('#FFFFFF').onChange((value: string) => { this.location = value; })
                 if (!this.editing) { Text('填入一份虚构示例 ›').fontSize(12).fontColor(Colors.green).padding({ top: 6, bottom: 6 }).onClick(() => this.example()) }
               } else if (this.step === 2) {
-                this.label('物品描述 / ' + this.description.length + ' / 300字')
+                Text('物品描述 / ' + this.description.length + ' / 300字').fontSize(13).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
                 TextArea({ placeholder: '描述颜色、外观、特殊标记，至少8字', text: this.description }).height(105).fontSize(13).maxLength(300).backgroundColor('#FFFFFF').onChange((value: string) => { this.description = value; })
                 this.label('联系指引 / 核对通过后对申请者可见')
                 TextInput({ text: this.contact, placeholder: '建议通过校园服务台转接' }).height(42).fontSize(13).maxLength(60).backgroundColor('#FFFFFF').onChange((value: string) => { this.contact = value; })

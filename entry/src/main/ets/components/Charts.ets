@@ -27,7 +27,7 @@ export struct TrendChart {
   @Local chartWidth: number = 270;
   coordinates(): number[][] {
     const max = Math.max(1, ...this.points.map((p: CountPoint) => p.count));
-    return this.points.map((p: CountPoint, index: number) => [24 + index * (this.chartWidth - 34) / Math.max(1, this.points.length - 1), 110 - p.count / max * 90]);
+    return this.points.map((p: CountPoint, index: number) => [24 + index * (this.chartWidth - 48) / Math.max(1, this.points.length - 1), 110 - p.count / max * 90]);
   }
   build() {
     Column({ space: 14 }) {
@@ -39,9 +39,14 @@ export struct TrendChart {
         Text(Math.max(1, ...this.points.map((p: CountPoint) => p.count)).toString()).fontSize(9).fontColor(Colors.muted).position({ x: 0, y: 15 })
         Text('0').fontSize(9).fontColor(Colors.muted).position({ x: 0, y: 103 })
       }.width('100%').height(120).onAreaChange((_oldArea: Area, newArea: Area) => { this.chartWidth = Number(newArea.width); })
-      Row() {
-        ForEach(this.points.filter((_p: CountPoint, index: number) => index === 0 || index === this.points.length - 1 || index % Math.ceil(this.points.length / 5) === 0), (p: CountPoint) => { Text(p.label).fontSize(9).fontColor(Colors.muted).layoutWeight(1).textAlign(TextAlign.Center) }, (p: CountPoint) => p.label)
-      }.width('100%')
+      Stack({ alignContent: Alignment.TopStart }) {
+        ForEach(this.points, (p: CountPoint, index: number) => {
+          if (index === 0 || index === this.points.length - 1 || index % Math.ceil(this.points.length / 4) === 0) {
+            Text(p.label).fontSize(9).fontColor(Colors.muted).width(42).height(16).textAlign(TextAlign.Center)
+              .position({ x: 24 + index * (this.chartWidth - 48) / Math.max(1, this.points.length - 1) - 21, y: 0 })
+          }
+        }, (p: CountPoint) => p.label)
+      }.width('100%').height(16)
       Text('横轴：日期 · 纵轴：有效启事数量').fontSize(11).fontColor(Colors.muted).width('100%')
     }.width('100%').padding(20).backgroundColor('#FFFFFF').borderRadius(20)
   }
@@ -64,7 +69,7 @@ export struct RecoveryChart {
         Column({ space: 16 }) {
           Text('已寻回  ' + this.data.resolved + ' 条').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green)
           Text('待寻回  ' + this.data.open + ' 条').fontSize(13).fontColor(Colors.muted)
-          Text('寻回率 = 已寻回 / 全部信息').fontSize(10).fontColor(Colors.muted)
+          Text('寻回率 = 已寻回 / 有效启事').fontSize(10).fontColor(Colors.muted)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%')
     }.width('100%').padding(20).backgroundColor('#FFFFFF').borderRadius(20)

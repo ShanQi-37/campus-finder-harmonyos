@@ -21,7 +21,7 @@ export struct ClaimCenterPage {
     if (this.busy) { return; } this.busy = true; this.error = '';
     try { await Api.review(id, action); if (this.active) { this.notice = action === 'accept' ? '已确认寻回，物品状态和统计已同步更新。' : '申请状态已更新。'; await this.load(); } }
     catch (error) { if (this.active) { this.error = (error as Error).message; } }
-    finally { if (this.active) { this.busy = false; } }
+    finally { this.busy = false; }
   }
   confirm(claim: Claim, action: string): void {
     this.getUIContext().showAlertDialog({ title: action === 'accept' ? '已核实并完成交接？' : (action === 'reject' ? '不通过这份申请？' : '取消这份申请？'),
@@ -55,7 +55,7 @@ export struct ClaimCenterPage {
                       Text((this.boxDirection === 'received' ? claim.senderName : claim.ownerName) + ' · ' + (claim.kind === 'found' ? '认领申请' : '寻物线索')).fontSize(10).fontColor(Colors.muted)
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                     Text(claimText(claim.status)).fontSize(10).fontColor(claimColor(claim.status))
-                  }.width('100%').onClick(() => { this.stack.pushPath({ name: 'Detail', param: claim.itemId }); })
+                  }.width('100%').enabled(!this.busy).onClick(() => { this.stack.pushPath({ name: 'Detail', param: claim.itemId }); })
                   Divider().color('#EDF0E9')
                   Text(claim.proof).fontSize(13).lineHeight(21).fontColor('#526F63').width('100%')
                   Text('联系：' + claim.contact).fontSize(11).fontColor(Colors.muted).width('100%')

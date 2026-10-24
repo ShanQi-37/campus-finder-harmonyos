@@ -28,7 +28,7 @@ export struct DetailPage {
     if (this.busy) { return; } this.busy = true; this.error = '';
     try { const result = action === 'favorite' ? await Api.favorite(this.itemId, !this.item.saved) : await Api.action(this.itemId, action); if (this.active) { this.item = result; this.changed = true; if (this.section === 'matches') { this.loadMatches(); } } }
     catch (error) { if (this.active) { this.error = (error as Error).message; } }
-    finally { if (this.active) { this.busy = false; } }
+    finally { this.busy = false; }
   }
   async loadMatches(): Promise<void> {
     this.section = 'matches'; const ticket = ++this.matchGeneration; this.matchPhase = 'loading'; this.matchError = '';
@@ -100,7 +100,7 @@ export struct DetailPage {
                 Text('仅记录真实操作；当前内容均为虚构演示数据。').fontSize(11).fontColor(Colors.muted).width('100%')
               }
             }.width('100%').padding({ left: 18, right: 18, bottom: 10 })
-          }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
+          }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top).enabled(!this.busy)
           Column({ space: 8 }) {
             if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('100%') }
             if (this.item.owner === Session.actor) {
