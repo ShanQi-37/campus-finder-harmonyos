@@ -39,7 +39,16 @@ function createApp(options = {}) {
   const file = options.file || path.join(__dirname, 'runtime', 'items.json');
   let items = options.memory ? seed() : (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : seed());
   let fault = 'normal';
-  const save = () => { if (!options.memory) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(items, null, 2)); } };
+  // Persist a complete snapshot first; a failed disk write must not mutate live data.
+  const save = nextItems => {
+    if (options.memory) return;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temporary = `${file}.${process.pid}.tmp`;
+    try {
+      fs.writeFileSync(temporary, JSON.stringify(nextItems, null, 2), 'utf8');
+      fs.renameSync(temporary, file);
+    } finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
+  };
   const reply = (res, status, data, message = 'ok') => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify({ code: status < 400 ? 0 : status, message, data })); };
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -50,6 +59,7 @@ function createApp(options = {}) {
       for await (const chunk of req) { raw += chunk; if (raw.length > 16384) { reply(res, 413, null, '请求过大'); return; } }
       let body;
       try { body = raw ? JSON.parse(raw) : {}; } catch { reply(res, 400, null, 'JSON格式错误'); return; }
+      if (body === null || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, null, '请求体必须为JSON对象');
       // Loopback-only test control; never exposed in the application's user interface.
       if (url.pathname === '/__test/mode' && req.method === 'POST') {
         if (!['normal', 'error', 'empty', 'slow', 'malformed'].includes(body.mode)) return reply(res, 400, null, '模式无效');
@@ -75,16 +85,21 @@ function createApp(options = {}) {
         }
         if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind)) return reply(res, 400, null, '分类或类型无效');
         const item = { id: randomUUID(), title: body.title.trim(), description: body.description.trim(), location: body.location.trim(), contact: body.contact.trim(), kind: body.kind, category: body.category, occurredAt: dateKey(), owner: 'demo-user', status: 'open', createdAt: new Date().toISOString() };
-        items.unshift(item); save(); return reply(res, 201, item);
+        const nextItems = [item, ...items]; save(nextItems); items = nextItems; return reply(res, 201, item);
       }
       const match = url.pathname.match(/^\/api\/items\/([^/]+)(\/resolve)?$/);
       if (match) {
-        const item = list.find(i => i.id === decodeURIComponent(match[1]));
+        let id;
+        try { id = decodeURIComponent(match[1]); } catch { return reply(res, 400, null, '物品标识格式错误'); }
+        const item = list.find(i => i.id === id);
         if (!item) return reply(res, 404, null, '物品不存在或已移除');
         if (!match[2] && req.method === 'GET') return reply(res, 200, item);
         if (match[2] && req.method === 'POST') {
           if (item.owner !== 'demo-user') return reply(res, 403, null, '仅可操作本人发布的信息');
-          item.status = 'resolved'; save(); return reply(res, 200, item);
+          if (item.status === 'resolved') return reply(res, 200, item);
+          const updated = { ...item, status: 'resolved' };
+          const nextItems = items.map(i => i.id === id ? updated : i);
+          save(nextItems); items = nextItems; return reply(res, 200, updated);
         }
       }
       reply(res, 404, null, '接口不存在');

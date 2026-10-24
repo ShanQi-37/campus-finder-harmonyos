@@ -27,6 +27,14 @@ test('HTTP业务闭环、校验、容错和持久化', async t => {
       assert.equal((await get('/api/items/missing')).code, 404);
       assert.equal((await fetch(base + '/api/items', { method: 'POST', body: '{bad' })).status, 400);
     });
+    await t.test('拒绝非对象JSON与畸形物品标识，服务继续可用', async () => {
+      for (const body of [null, [], 7, 'invalid']) {
+        assert.equal((await post('/api/items', body)).status, 400);
+        assert.equal((await post('/__test/mode', body)).status, 400);
+      }
+      assert.equal((await get('/api/items/%ZZ')).code, 400);
+      assert.equal((await get('/api/items')).data.total, 12);
+    });
     await t.test('发布后列表和三个统计指标同步更新，重复寻回幂等', async () => {
       const before = (await get('/api/statistics')).data;
       const response = await post('/api/items', { title: '测试物品校园卡', location: '测试服务台', description: '这是用于验证网络数据变化的演示物品。', contact: '校园服务台', kind: 'found', category: '证件卡片' });
@@ -56,6 +64,23 @@ test('HTTP业务闭环、校验、容错和持久化', async t => {
       base = `http://127.0.0.1:${server.address().port}`;
       assert.equal((await get('/api/items')).data.total, 13);
       assert.equal((await get('/api/statistics')).data.resolved, 5);
+    });
+    await t.test('持久化失败不会新增记录或提前标记寻回', async () => {
+      const blockedParent = path.join(dir, 'blocked-parent');
+      fs.writeFileSync(blockedParent, 'This file deliberately blocks a data directory.');
+      const failing = createApp({ file: path.join(blockedParent, 'items.json'), delay: 0 });
+      await new Promise(resolve => failing.listen(0, '127.0.0.1', resolve));
+      const failedBase = `http://127.0.0.1:${failing.address().port}`;
+      try {
+        const failedPost = async (p, body) => fetch(failedBase + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        assert.equal((await failedPost('/api/items', { title: '未保存物品', location: '测试地点', description: '这条记录应因磁盘写入失败而不产生。', contact: '测试服务台', kind: 'lost', category: '证件卡片' })).status, 500);
+        assert.equal((await (await fetch(failedBase + '/api/items')).json()).data.total, 12);
+        assert.equal((await failedPost('/api/items/seed-2/resolve', {})).status, 500);
+        assert.equal((await (await fetch(failedBase + '/api/items/seed-2')).json()).data.status, 'open');
+        const statistics = (await (await fetch(failedBase + '/api/statistics')).json()).data;
+        assert.equal(statistics.resolved, 4);
+        assert.equal(statistics.recoveryRate, 33);
+      } finally { await new Promise(resolve => failing.close(resolve)); }
     });
   } finally {
     await new Promise(resolve => server.close(resolve));
