@@ -27,7 +27,7 @@ export struct TrendChart {
   @Local chartWidth: number = 270;
   coordinates(): number[][] {
     const max = Math.max(1, ...this.points.map((p: CountPoint) => p.count));
-    return this.points.map((p: CountPoint, index: number) => [12 + index * (this.chartWidth - 24) / Math.max(1, this.points.length - 1), 110 - p.count / max * 90]);
+    return this.points.map((p: CountPoint, index: number) => [24 + index * (this.chartWidth - 34) / Math.max(1, this.points.length - 1), 110 - p.count / max * 90]);
   }
   build() {
     Column({ space: 14 }) {
@@ -36,6 +36,8 @@ export struct TrendChart {
       Stack({ alignContent: Alignment.TopStart }) {
         Column() { Divider().color('#EFF2EA'); Blank(); Divider().color('#EFF2EA'); Blank(); Divider().color('#D5DECE') }.height(110).width('100%')
         Polyline().points(this.coordinates()).stroke('#447C60').strokeWidth(3).fillOpacity(0).width('100%').height(120)
+        Text(Math.max(1, ...this.points.map((p: CountPoint) => p.count)).toString()).fontSize(9).fontColor(Colors.muted).position({ x: 0, y: 15 })
+        Text('0').fontSize(9).fontColor(Colors.muted).position({ x: 0, y: 103 })
       }.width('100%').height(120).onAreaChange((_oldArea: Area, newArea: Area) => { this.chartWidth = Number(newArea.width); })
       Row() {
         ForEach(this.points.filter((_p: CountPoint, index: number) => index === 0 || index === this.points.length - 1 || index % Math.ceil(this.points.length / 5) === 0), (p: CountPoint) => { Text(p.label).fontSize(9).fontColor(Colors.muted).layoutWeight(1).textAlign(TextAlign.Center) }, (p: CountPoint) => p.label)

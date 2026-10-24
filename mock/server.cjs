@@ -94,6 +94,7 @@ function createApp(options = {}) {
         return { ...item, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
           contactVisible: item.owner === actor || accepted, ownerName: names[item.owner],
           saved: store.favorites.some(f => f.actor === actor && f.itemId === item.id),
+          myPending: store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'pending'),
           claimCount: store.claims.filter(c => c.itemId === item.id && c.status === 'pending').length };
       };
       const claimView = claim => {

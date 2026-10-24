@@ -96,7 +96,7 @@ export struct DetailPage {
             } else {
               Row({ space: 10 }) {
                 Button(this.item.saved ? '★ 已收藏' : '☆ 收藏').height(44).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.soft).onClick(() => { this.action('favorite'); })
-                Button(this.item.status === 'open' && !this.item.myPending ? (this.item.kind === 'found' ? '这是我的 · 申请认领' : '我有线索 · 联系发布者') : '已提交 · 查看申请').height(44).fontSize(12).backgroundColor(Colors.green).layoutWeight(1)
+                Button(this.item.status === 'open' ? (this.item.myPending ? '已提交 · 查看申请' : (this.item.kind === 'found' ? '这是我的 · 申请认领' : '我有线索 · 联系发布者')) : '查看我的申请').height(44).fontSize(12).backgroundColor(Colors.green).layoutWeight(1)
                   .onClick(() => { this.stack.pushPath({ name: this.item.status === 'open' && !this.item.myPending ? 'ClaimForm' : 'ClaimCenter', param: this.item.status === 'open' && !this.item.myPending ? this.itemId : 'sent' }); })
               }.width('100%')
             }

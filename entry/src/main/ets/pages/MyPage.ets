@@ -27,7 +27,7 @@ export struct MyPage {
         Row({ space: 12 }) {
           Text(this.actor === 'demo-user' ? '同' : (this.actor === 'peer-01' ? '助' : '愿')).fontSize(24).fontColor('#FFFCED').width(58).height(58).textAlign(TextAlign.Center).backgroundColor(Colors.green).borderRadius(20)
           Column({ space: 6 }) {
-            Text(Session.displayName()).fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
+            Text(this.actor === 'demo-user' ? '校园体验同学' : (this.actor === 'peer-01' ? '互助体验同学' : '志愿体验同学')).fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
             Text('固定虚构身份 · 可切换体验双角色流程').fontSize(10).fontColor(Colors.muted)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         }.padding({ left: 18, right: 18 }).width('100%')

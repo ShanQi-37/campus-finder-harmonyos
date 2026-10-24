@@ -36,11 +36,13 @@ export struct FeedContent {
           ForEach(this.model.items, (item: Item) => { ListItem() { ItemCard({ item: item, onOpen: (id: string) => this.onOpen(id) }) } }, (item: Item) => item.id)
         }.layoutWeight(1).padding({ left: 18, right: 18 }).scrollBar(BarState.Auto).width('100%')
       }
+      if (this.model.phase === 'ready') {
       Row({ space: 8 }) {
-        Button('‹ 上一页').height(28).fontSize(10).fontColor(Colors.green).backgroundColor('#FFFFFF').enabled(this.model.page > 1 && this.model.phase !== 'loading').onClick(() => this.model.turn(-1))
+        Button('‹ 上一页').height(28).fontSize(10).fontColor(Colors.green).backgroundColor('#FFFFFF').enabled(this.model.page > 1).onClick(() => this.model.turn(-1))
         Text('第 ' + this.model.page + ' 页 / 共 ' + this.model.total + ' 条').fontSize(10).fontColor(Colors.muted).layoutWeight(1).textAlign(TextAlign.Center)
-        Button('下一页 ›').height(28).fontSize(10).fontColor(Colors.green).backgroundColor('#FFFFFF').enabled(this.model.hasMore && this.model.phase !== 'loading').onClick(() => this.model.turn(1))
+        Button('下一页 ›').height(28).fontSize(10).fontColor(Colors.green).backgroundColor('#FFFFFF').enabled(this.model.hasMore).onClick(() => this.model.turn(1))
       }.width('100%').padding({ left: 18, right: 18, bottom: 4 })
+      }
     }.width('100%').height('100%')
   }
 }

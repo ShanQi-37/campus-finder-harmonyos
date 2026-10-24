@@ -58,11 +58,13 @@ test('第二版：多角色业务状态机及原子持久化', async t => {
       assert.equal((await call(`/api/items/${itemId}/update`, input)).status, 403);
       assert.equal((await call(`/api/items/${itemId}/update`, { ...input, title: '更新后的蓝色演示耳机盒' }, 'peer-01')).status, 200);
       assert.equal((await call(`/api/items/${itemId}`)).data.contactVisible, false);
+      assert.equal((await call(`/api/items/${itemId}`)).data.myPending, false);
       assert.equal((await call(`/api/items/${itemId}`, undefined, 'peer-01')).data.contactVisible, true);
       assert.equal((await call(`/api/items/${itemId}/claims`, proof, 'peer-01')).status, 403);
       assert.equal((await call(`/api/items/${itemId}/claims`, { ...proof, proof: '短' })).status, 400);
       const claim = await call(`/api/items/${itemId}/claims`, proof); acceptedId = claim.data.id;
       assert.equal(claim.status, 201); assert.equal((await call(`/api/items/${itemId}/claims`, proof)).status, 409);
+      assert.equal((await call(`/api/items/${itemId}`)).data.myPending, true);
       assert.equal((await call(`/api/items/${itemId}/update`, { ...input, category: '生活用品' }, 'peer-01')).status, 409);
       assert.equal((await call('/api/claims?direction=received')).data.claims.length, 0);
       assert.equal((await call('/api/claims?direction=sent')).data.claims[0].id, acceptedId);
@@ -85,6 +87,7 @@ test('第二版：多角色业务状态机及原子持久化', async t => {
       await call(`/api/claims/${acceptedId}/accept`, {}, 'peer-01');
       const item = (await call(`/api/items/${itemId}`)).data;
       assert.equal(item.status, 'resolved'); assert.equal(item.contactVisible, true); assert.equal(item.contact, input.contact);
+      assert.equal(item.myPending, false);
       assert.ok(item.resolvedAt); assert.equal(item.history.at(-1).label, '核对申请通过，确认完成交接');
       assert.equal((await call(`/api/items/${itemId}`, undefined, 'peer-02')).data.contactVisible, false);
       assert.equal((await call('/api/claims?direction=sent', undefined, 'peer-02')).data.claims.find(c => c.id === other.id).status, 'rejected');
