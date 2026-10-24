@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const CATEGORIES = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 const dateKey = (date = new Date()) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 function seed() {
@@ -29,14 +29,15 @@ const ACTORS = ['demo-user', 'peer-01', 'peer-02'];
 const names = { 'demo-user': '校园体验同学', 'peer-01': '互助体验同学', 'peer-02': '志愿体验同学' };
 const now = () => new Date().toISOString();
 const event = (label, at = now()) => ({ label, at });
+const fingerprint = input => createHash('sha256').update(JSON.stringify(['title', 'location', 'description', 'contact', 'kind', 'category', 'occurredAt'].map(key => input[key]))).digest('hex');
 function normalize(item) {
   return { ...item, owner: ACTORS.includes(item.owner) ? item.owner : 'peer-01',
     updatedAt: item.updatedAt || item.createdAt, resolvedAt: item.resolvedAt || (item.status === 'resolved' ? item.createdAt : ''),
     requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
 }
-function aggregate(items, claims = [], days = 7, category = 'all') {
-  const first = dateKey(new Date(Date.now() - (days - 1) * 86400000));
-  const scoped = items.filter(i => dateKey(new Date(i.createdAt)) >= first && (category === 'all' || i.category === category));
+function aggregate(items, claims = [], days = 7, category = 'all', reference = new Date()) {
+  const today = dateKey(reference), first = dateKey(new Date(reference.getTime() - (days - 1) * 86400000));
+  const scoped = items.filter(i => { const day = dateKey(new Date(i.createdAt)); return day >= first && day <= today && (category === 'all' || i.category === category); });
   const active = scoped.filter(i => i.status !== 'withdrawn');
   const total = active.length, resolved = active.filter(i => i.status === 'resolved').length;
   return { total, resolved, open: total - resolved, recoveryRate: total ? Math.round(resolved / total * 100) : 0,
@@ -44,9 +45,9 @@ function aggregate(items, claims = [], days = 7, category = 'all') {
     withdrawn: scoped.length - total, pendingClaims: claims.filter(c => c.status === 'pending' && active.some(i => i.id === c.itemId)).length,
     categories: CATEGORIES.map(label => ({ label, count: active.filter(i => i.category === label).length })),
     trend: Array.from({ length: days }, (_, index) => {
-      const day = dateKey(new Date(Date.now() - (days - 1 - index) * 86400000));
+      const day = dateKey(new Date(reference.getTime() - (days - 1 - index) * 86400000));
       return { label: day.slice(5), count: active.filter(i => dateKey(new Date(i.createdAt)) === day).length };
-    }), days, category, updatedAt: now() };
+    }), days, category, updatedAt: reference.toISOString() };
 }
 function createApp(options = {}) {
   const file = options.file || path.join(__dirname, 'runtime', 'items.json');
@@ -70,16 +71,18 @@ function createApp(options = {}) {
     res.end(JSON.stringify({ code: status < 400 ? 0 : status, message, data }));
   };
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://127.0.0.1'), started = Date.now();
+    const started = Date.now(); let url;
+    try { url = new URL(req.url, 'http://127.0.0.1'); }
+    catch { return reply(res, 400, null, '请求地址格式错误'); }
     res.on('finish', () => console.log(JSON.stringify({ time: now(), method: req.method, path: url.pathname, query: url.search, status: res.statusCode, ms: Date.now() - started })));
     try {
-      let raw = '';
-      for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > 16384) return reply(res, 413, null, '请求过大'); }
+      const chunks = []; let bytes = 0;
+      for await (const chunk of req) { bytes += chunk.length; if (bytes > 16384) return reply(res, 413, null, '请求过大'); chunks.push(chunk); }
       let body;
-      try { body = raw ? JSON.parse(raw) : {}; } catch { return reply(res, 400, null, 'JSON格式错误'); }
+      try { const raw = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)); body = raw ? JSON.parse(raw) : {}; } catch { return reply(res, 400, null, 'JSON或UTF8格式错误'); }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, null, '请求体必须为JSON对象');
       if (url.pathname === '/__test/mode' && req.method === 'POST') {
-        if (!['normal', 'error', 'empty', 'slow', 'malformed'].includes(body.mode)) return reply(res, 400, null, '模式无效');
+        if (!['normal', 'error', 'empty', 'slow', 'malformed', 'shape'].includes(body.mode)) return reply(res, 400, null, '模式无效');
         fault = body.mode; return reply(res, 200, { mode: fault });
       }
       if (url.pathname === '/health') return reply(res, 200, { service: 'CampusFinder', version: 2, count: store.items.length });
@@ -89,10 +92,12 @@ function createApp(options = {}) {
       await new Promise(resolve => setTimeout(resolve, fault === 'slow' ? 2500 : (options.delay ?? 250)));
       if (req.method === 'GET' && fault === 'error') return reply(res, 503, null, '服务暂不可用，请稍后重试');
       if (req.method === 'GET' && fault === 'malformed') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{invalid'); }
+      if (req.method === 'GET' && fault === 'shape') return reply(res, 200, { items: [null], claims: [null], matches: [null], exists: true, input: { requestId: '' } });
       const list = fault === 'empty' ? [] : store.items;
       const view = item => {
         const accepted = store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'accepted');
-        return { ...item, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
+        const { requestId, createFingerprint, ...visible } = item;
+        return { ...visible, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
           contactVisible: item.owner === actor || accepted, ownerName: names[item.owner],
           saved: store.favorites.some(f => f.actor === actor && f.itemId === item.id),
           myPending: store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'pending'),
@@ -140,6 +145,10 @@ function createApp(options = {}) {
         return reply(res, 200, { claims: [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(claimView), pending: rows.filter(c => c.status === 'pending').length });
       }
       if (url.pathname === '/api/items' && req.method === 'GET') {
+        for (const [key, choices] of [['kind', ['all', 'lost', 'found']], ['category', ['all', ...CATEGORIES]], ['status', ['all', 'open', 'resolved', 'withdrawn']], ['owner', ['all', ...ACTORS]], ['sort', ['latest', 'oldest']], ['saved', ['true', 'false']]]) {
+          const value = url.searchParams.get(key);
+          if (value && !choices.includes(value)) return reply(res, 400, null, '筛选条件无效');
+        }
         let result = list;
         for (const key of ['category', 'kind', 'owner', 'status']) {
           const value = url.searchParams.get(key);
@@ -163,15 +172,24 @@ function createApp(options = {}) {
         }
         if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind)) return '分类或类型无效';
         if (body.occurredAt !== undefined && (typeof body.occurredAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.occurredAt) || !Number.isFinite(Date.parse(body.occurredAt)) || new Date(body.occurredAt).toISOString().slice(0, 10) !== body.occurredAt || body.occurredAt > dateKey())) return '日期需为有效的YYYY-MM-DD，且不能晚于今天';
-        if (body.requestId !== undefined && (typeof body.requestId !== 'string' || body.requestId.length > 80)) return '请求标识无效';
+        if (body.requestId !== undefined && (typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80)) return '请求标识无效';
         return '';
       };
       const fields = () => ({ title: body.title.trim(), description: body.description.trim(), location: body.location.trim(), contact: body.contact.trim(), kind: body.kind, category: body.category, occurredAt: body.occurredAt || dateKey() });
       if (url.pathname === '/api/items' && req.method === 'POST') {
         const invalid = validateItem(); if (invalid) return reply(res, 400, null, invalid);
         const existing = body.requestId && store.items.find(i => i.owner === actor && i.requestId === body.requestId);
-        if (existing) return reply(res, 201, view(existing));
-        const item = normalize({ ...fields(), id: randomUUID(), owner: actor, status: 'open', createdAt: now(), requestId: body.requestId || '' });
+        const payload = fields();
+        // An omitted date was defaulted on the original request, not on each retry day.
+        if (existing && body.occurredAt === undefined) payload.occurredAt = existing.occurredAt;
+        const key = fingerprint(payload);
+        if (existing) {
+          if ((existing.createFingerprint || fingerprint(existing)) !== key) return reply(res, 409, null, '这份草稿已发布且内容不同，请在我的记录中编辑已发布启事');
+          const drafts = store.drafts.filter(d => d.actor !== actor || d.input.requestId !== existing.requestId);
+          if (drafts.length !== store.drafts.length) commit({ ...store, drafts });
+          return reply(res, 201, view(existing));
+        }
+        const item = normalize({ ...payload, id: randomUUID(), owner: actor, status: 'open', createdAt: now(), requestId: body.requestId || '', createFingerprint: key });
         commit({ ...store, items: [item, ...store.items], drafts: store.drafts.filter(d => d.actor !== actor || d.input.requestId !== item.requestId) }); return reply(res, 201, view(item));
       }
       const match = url.pathname.match(/^\/api\/items\/([^/]+)(?:\/(resolve|withdraw|restore|update|favorite|claims|matches))?$/);
