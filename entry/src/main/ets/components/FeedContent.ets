@@ -6,6 +6,8 @@ export struct FeedContent {
   @Param model: FeedModel = new FeedModel();
   @Param filters: boolean = true;
   @Event onOpen: (id: string) => void = () => {};
+  @Event onRefresh: () => void = () => {};
+  reset(): void { this.model.reset(); this.onRefresh(); }
   build() {
     Column({ space: 10 }) {
       if (this.filters) {
@@ -19,7 +21,7 @@ export struct FeedContent {
           ChoiceChip({ label: '我丢了', selected: this.model.kind === 'lost', onSelect: () => { this.model.kind = 'lost'; this.model.load(); } })
           ChoiceChip({ label: '我捡到', selected: this.model.kind === 'found', onSelect: () => { this.model.kind = 'found'; this.model.load(); } })
           Blank()
-          Text('重置').fontSize(12).fontColor(Colors.green).padding(6).onClick(() => this.model.reset())
+          Text('重置').fontSize(12).fontColor(Colors.green).padding(6).onClick(() => this.reset())
         }.width('100%').padding({ left: 18, right: 18 })
         Row({ space: 6 }) {
           Select(CATEGORY_OPTIONS).value(this.model.category === 'all' ? '全部分类' : this.model.category).selected(CATEGORIES.indexOf(this.model.category) + 1).font({ size: 12 }).height(30).backgroundColor('#E9EFEB').layoutWeight(1)
@@ -37,7 +39,7 @@ export struct FeedContent {
         }.width('100%').padding({ left: 20, right: 20 })
       }
       if (this.model.phase !== 'ready') {
-        StatePanel({ phase: this.model.phase, error: this.model.error, emptyAction: this.filters ? '清空筛选' : '刷新信息', onRetry: () => { if (this.filters && this.model.phase === 'empty') { this.model.reset(); } else { this.model.load(); } } }).layoutWeight(1)
+        StatePanel({ phase: this.model.phase, error: this.model.error, emptyAction: this.filters ? '清空筛选' : '刷新信息', onRetry: () => { if (this.filters && this.model.phase === 'empty') { this.reset(); } else { this.model.load(); this.onRefresh(); } } }).layoutWeight(1)
       } else {
         List({ space: 10 }) {
           ForEach(this.model.items, (item: Item) => { ListItem() { ItemCard({ item: item, onOpen: (id: string) => this.onOpen(id) }) } }, (item: Item) => item.id)

@@ -19,6 +19,9 @@ struct Index {
   aboutToDisappear(): void { this.model.cancel(); this.generation++; }
   async refresh(): Promise<void> {
     this.model.load(false);
+    await this.refreshHeadline();
+  }
+  async refreshHeadline(): Promise<void> {
     const ticket = ++this.generation;
     try { const stats = await Api.statistics(30); if (ticket === this.generation) { this.headline = '近30日 ' + stats.total + ' 条线索 · ' + stats.resolved + ' 份重逢'; } }
     catch (error) { if (ticket === this.generation) { this.headline = '每一份善意，都值得被看见'; } }
@@ -45,7 +48,7 @@ struct Index {
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Image($r('app.media.campus_hero')).width(95).height(94).objectFit(ImageFit.Contain)
         }.width('90%').height(102).padding({ left: 18, right: 5 }).backgroundColor('#175D50').borderRadius(20)
-        FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id) }).layoutWeight(1)
+        FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id), onRefresh: () => { this.refreshHeadline(); } }).layoutWeight(1)
         BottomNav({ active: 'Home', onNavigate: (route: string) => { if (route === 'Home') { this.refresh(); } else { this.open(route); } } })
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).navDestination(this.destination).mode(NavigationMode.Stack)
