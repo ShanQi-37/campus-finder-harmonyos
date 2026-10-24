@@ -1,12 +1,17 @@
 # 拾光校园 · Campus Finder
 
-原生 HarmonyOS 校园失物招领与寻回数据可视化课程项目。第二版覆盖完整的本机演示业务：发布与编辑启事、组合搜索、收藏、认领或提供线索、双方核对交接、撤回恢复、个人记录和动态统计。
+原生 HarmonyOS 校园失物招领与寻回数据可视化课程项目。第三版覆盖完整的本机演示业务：发布与编辑启事、组合搜索、收藏、认领或提供线索、双方核对交接、撤回恢复、个人记录和动态统计。
 
-![新版原生界面](screenshots/v2/18-published.png)
+![第三版原生广场](screenshots/v3/22-final-home.png)
+
+![提交前预览](screenshots/v3/08-publish-review.png)
 
 ## 功能
 
-- 七个 Navigation 业务页面：失物广场、线索详情、两步发布/编辑、我的校园、互助统计、申请表单、认领与线索中心。
+- 草稿续写：按体验身份保存未填完整的内容，返回时提醒保存，重新进入恢复；三步预览后提交，成功后原子清理对应草稿，失败可重试。
+- 相似线索：从开放启事查找同类、相反类型、不同发布者的候选，按地点和日期排序并说明理由；仍需人工核对，联系信息保持原有保护。
+- 个人任务：待我核对、我的申请、发布草稿和收藏数量均来自HTTP；广场、统计、我的复用矢量底部导航，主入口切换替换栈顶。
+- 七个 Navigation 业务页面：失物广场、线索详情、三步发布/编辑、我的校园、互助统计、申请表单、认领与线索中心。
 - 服务端组合筛选：类型、类别、关键词、状态、排序；分页按钮便于访问全部记录。
 - 启事生命周期：待寻回 → 已寻回；待寻回 → 已撤回 → 恢复待寻回。仅所属演示身份能管理。
 - 认领闭环：他人提交核对说明 → 发布者收到 → 核实交接并接受/拒绝；申请者可取消待处理申请。同一物品通过一份申请后自动关闭其余待处理申请。
@@ -24,8 +29,8 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
 # 另一窗口编译
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-# 真实HTTP测试，两个文件均应执行
-& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs
+# 真实HTTP测试，三个文件均应执行
+& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs
 ```
 
 脚本支持 `-DevEcoPath`。Hvigor不支持中文工程路径；构建脚本生成临时英文目录并把未签名HAP拷回outputs。用IDE打开脚本输出的英文目录，选择 `entry/src/main/ets/pages/Index.ets`，点击Previewer眼睛图标。先启动Mock；连接失败点“重新加载”。Previewer无需真机、完整模拟器或签名。
@@ -34,9 +39,9 @@ Previewer连接 `http://127.0.0.1:4524`。其他设备需另行配置端口映�
 
 ## 双角色演示
 
-“我的”提供校园、互助、志愿三个固定虚构身份，切换后请求头 `X-Demo-User` 随之更新。这是业务演示工具，**不是真实登录认证**。用校园同学申请 `seed-1` 校园卡，换互助同学在收到的申请中核对并确认，换回申请者查看结果与联系指引。新环境自动生成12条虚构记录；本机已执行操作，数量会不同。
+“我的→身份体验”提供校园、互助、志愿三个固定虚构身份，切换后请求头 `X-Demo-User` 随之更新。这是业务演示工具，**不是真实登录认证**。用校园同学申请 `seed-1` 校园卡，换互助同学在收到的申请中核对并确认，换回申请者查看结果与联系指引。新环境自动生成12条虚构记录；本机已执行操作，数量会不同。
 
-数据保存 `mock/runtime/items.json`（不入Git）。第一版数组自动兼容为第二版items/claims/favorites快照；不用删除旧数据。单进程串行写入，不承诺多进程数据库事务。
+数据保存 `mock/runtime/items.json`（不入Git）。第一版数组及旧对象自动兼容为包含items/claims/favorites/drafts的快照；不用删除旧数据。单进程串行写入，不承诺多进程数据库事务。
 
 ## 文档与评分
 

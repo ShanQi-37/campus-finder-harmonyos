@@ -32,6 +32,22 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 
 统计按createdAt上海日期筛选含今日7/14/30日，按category组合过滤，withdrawn不计入有效总量；恢复后重新计入原发布日。total=open+resolved=lost+found=sum(categories)=sum(trend)。recoveryRate=round(resolved/total*100)，无数据为0；pendingClaims只计所选有效启事的pending，withdrawn独立返回。趋势表示当前有效启事在各发布日的数量，不是不可变的历史快照。
 
-存储 `mock/runtime/items.json`：`{version:2,items,claims,favorites}`。兼容旧数组，保留记录并映射旧的其他虚构身份至peer-01。每次完整快照写同目录临时文件→重命名→替换内存；任何写入失败500且内存不变。非对象JSON、异常ID编码、超大请求均拒绝。单进程中读改写同步，不支持多进程同时写文件。
+存储 `mock/runtime/items.json`：`{version:2,items,claims,favorites,drafts}`。兼容旧数组，保留记录并映射旧的其他虚构身份至peer-01。每次完整快照写同目录临时文件→重命名→替换内存；任何写入失败500且内存不变。非对象JSON、异常ID编码、超大请求均拒绝。单进程中读改写同步，不支持多进程同时写文件。
 
 仅本机 `/__test/mode` POST `{mode:"normal"}` 支持normal/error(GET503)/empty/slow(2.5秒)/malformed(GET错误JSON)；界面不暴露，不删除已有数据。演示后恢复normal。接口测试使用隔离临时目录，不改变实际演示数据。
+
+
+## 第三版 增量接口与规则
+
+| 方法 | 路径 | 返回或业务约束 |
+| --- | --- | --- |
+| GET | /api/me | posted/open/resolved/saved、incomingPending/outgoingPending、draftTitle/draftUpdatedAt；当前身份独立摘要 |
+| GET | /api/draft | {exists,input,updatedAt}；无草稿时input为null |
+| POST | /api/draft | PublishInput同名字段，允许内容未填完整；每个身份一份草稿，保存完整替换 |
+| GET | /api/items/:id/matches | {matches:[{item,reasons}]}，最多5条；Item沿用当前身份的联系可见性 |
+
+草稿字符串字段必须存在并遵守标题36、地点30、描述300、联系60、日期10字上限；kind/category合法，requestId为1–80字非空标识。草稿允许日期尚未填写或未完成，正式提交仍执行完整日期和内容校验。成功发布的快照同时移除当前身份且requestId一致的草稿；发布失败不清理。旧发布请求的幂等重试也不会清理之后保存的另一份草稿。旧数组和不含drafts的第二版对象兼容读取，不重置原记录。
+
+相似线索仅从open启事匹配：同类别、相反kind、与原启事不同owner，排除自身、结束和撤回记录。相同地点优先，其次包含关系或共享连续两字，再看发生日期相差不超过3日；并列按创建时间倒序、ID稳定排序。返回可解释理由，不返回概率、不声称AI识别，也不证明物品归属。已结束启事返回空候选，他人的撤回启事404。
+
+分页请求在数据变化后超出末页时自动返回最后有效页；空集合返回第1页。客户端使用返回page更新页码，避免最后一页操作后困在无效页。异常恢复或重置筛选时，列表与首页实时摘要同时重新请求。
