@@ -54,6 +54,7 @@ function createApp(options = {}) {
   // Legacy arrays are migrated without losing any previously published records.
   let store = Array.isArray(rawStore) ? { version: 2, items: rawStore.map(normalize), claims: [], favorites: [] }
     : { ...rawStore, version: 2, items: rawStore.items.map(normalize) };
+  store = { ...store, drafts: store.drafts || [] };
   let fault = 'normal';
   const commit = next => {
     if (!options.memory) {
@@ -101,6 +102,32 @@ function createApp(options = {}) {
         const item = store.items.find(i => i.id === claim.itemId);
         return { ...claim, itemTitle: item.title, kind: item.kind, category: item.category, senderName: names[claim.sender], ownerName: names[claim.owner] };
       };
+      if (url.pathname === '/api/me' && req.method === 'GET') {
+        const own = list.filter(i => i.owner === actor), claims = fault === 'empty' ? [] : store.claims;
+        const draft = fault === 'empty' ? undefined : store.drafts.find(d => d.actor === actor);
+        return reply(res, 200, { posted: own.length, open: own.filter(i => i.status === 'open').length,
+          resolved: own.filter(i => i.status === 'resolved').length,
+          saved: list.filter(i => i.status !== 'withdrawn' && store.favorites.some(f => f.actor === actor && f.itemId === i.id)).length,
+          incomingPending: claims.filter(c => c.owner === actor && c.status === 'pending').length,
+          outgoingPending: claims.filter(c => c.sender === actor && c.status === 'pending').length,
+          draftTitle: draft ? draft.input.title || '未命名草稿' : '', draftUpdatedAt: draft ? draft.updatedAt : '' });
+      }
+      if (url.pathname === '/api/draft') {
+        if (req.method === 'GET') {
+          const draft = fault === 'empty' ? undefined : store.drafts.find(d => d.actor === actor);
+          return reply(res, 200, { exists: !!draft, input: draft ? draft.input : null, updatedAt: draft ? draft.updatedAt : '' });
+        }
+        if (req.method === 'POST') {
+          for (const [key, max] of [['title', 36], ['location', 30], ['description', 300], ['contact', 60], ['occurredAt', 10]]) {
+            if (typeof body[key] !== 'string' || body[key].length > max) return reply(res, 400, null, '草稿字段格式或长度无效');
+          }
+          if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind) || typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80) return reply(res, 400, null, '草稿类型或标识无效');
+          const input = { title: body.title.trim(), location: body.location.trim(), description: body.description.trim(), contact: body.contact.trim(), occurredAt: body.occurredAt.trim(), kind: body.kind, category: body.category, requestId: body.requestId };
+          const draft = { actor, input, updatedAt: now() };
+          commit({ ...store, drafts: [...store.drafts.filter(d => d.actor !== actor), draft] });
+          return reply(res, 200, { exists: true, input, updatedAt: draft.updatedAt });
+        }
+      }
       if (url.pathname === '/api/statistics' && req.method === 'GET') {
         const days = Number(url.searchParams.get('days') || 7), category = url.searchParams.get('category') || 'all';
         if (![7, 14, 30].includes(days) || (category !== 'all' && !CATEGORIES.includes(category))) return reply(res, 400, null, '统计条件无效');
@@ -125,9 +152,10 @@ function createApp(options = {}) {
         if (keyword.length > 80) return reply(res, 400, null, '关键词最多80字');
         if (keyword) result = result.filter(i => `${i.title} ${i.description} ${i.location}`.toLowerCase().includes(keyword));
         const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 100);
-        if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) return reply(res, 400, null, '分页参数无效');
+        if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) return reply(res, 400, null, '分页参数无效');
         const sorted = [...result].sort((a, b) => (url.searchParams.get('sort') === 'oldest' ? 1 : -1) * a.createdAt.localeCompare(b.createdAt));
-        return reply(res, 200, { items: sorted.slice((page - 1) * pageSize, page * pageSize).map(view), total: result.length, page, pageSize, hasMore: page * pageSize < result.length });
+        const current = Math.min(page, Math.max(1, Math.ceil(result.length / pageSize)));
+        return reply(res, 200, { items: sorted.slice((current - 1) * pageSize, current * pageSize).map(view), total: result.length, page: current, pageSize, hasMore: current * pageSize < result.length });
       }
       const validateItem = () => {
         for (const [key, min, max, label] of [['title', 2, 36, '标题'], ['location', 2, 30, '地点'], ['description', 8, 300, '描述'], ['contact', 2, 60, '联系指引']]) {
@@ -144,15 +172,27 @@ function createApp(options = {}) {
         const existing = body.requestId && store.items.find(i => i.owner === actor && i.requestId === body.requestId);
         if (existing) return reply(res, 201, view(existing));
         const item = normalize({ ...fields(), id: randomUUID(), owner: actor, status: 'open', createdAt: now(), requestId: body.requestId || '' });
-        commit({ ...store, items: [item, ...store.items] }); return reply(res, 201, view(item));
+        commit({ ...store, items: [item, ...store.items], drafts: store.drafts.filter(d => d.actor !== actor || d.input.requestId !== item.requestId) }); return reply(res, 201, view(item));
       }
-      const match = url.pathname.match(/^\/api\/items\/([^/]+)(?:\/(resolve|withdraw|restore|update|favorite|claims))?$/);
+      const match = url.pathname.match(/^\/api\/items\/([^/]+)(?:\/(resolve|withdraw|restore|update|favorite|claims|matches))?$/);
       if (match) {
         let id;
         try { id = decodeURIComponent(match[1]); } catch { return reply(res, 400, null, '物品标识格式错误'); }
         const item = list.find(i => i.id === id), action = match[2];
         if (!item || (item.status === 'withdrawn' && item.owner !== actor)) return reply(res, 404, null, '物品不存在或已撤回');
         if (!action && req.method === 'GET') return reply(res, 200, view(item));
+        if (action === 'matches' && req.method === 'GET') {
+          // Explainable rules suggest leads; they never establish ownership or unlock contact details.
+          const rows = item.status !== 'open' ? [] : list.filter(i => i.id !== id && i.status === 'open' && i.kind !== item.kind && i.category === item.category && i.owner !== item.owner).map(candidate => {
+            const reasons = ['同类物品'], a = item.location.trim(), b = candidate.location.trim(); let rank = 0;
+            if (a === b) { rank += 4; reasons.push('同一地点'); }
+            else if (a.includes(b) || b.includes(a) || Array.from({ length: Math.max(0, a.length - 1) }, (_, index) => a.slice(index, index + 2)).some(part => b.includes(part))) { rank += 2; reasons.push('地点相近'); }
+            const gap = Math.abs(Date.parse(item.occurredAt) - Date.parse(candidate.occurredAt)) / 86400000;
+            if (gap <= 3) { rank += 1; reasons.push('日期相近'); }
+            return { item: view(candidate), reasons, rank };
+          }).sort((a, b) => b.rank - a.rank || b.item.createdAt.localeCompare(a.item.createdAt) || a.item.id.localeCompare(b.item.id)).slice(0, 5);
+          return reply(res, 200, { matches: rows.map(({ item, reasons }) => ({ item, reasons })) });
+        }
         if (req.method !== 'POST') return reply(res, 404, null, '接口不存在');
         if (action === 'favorite') {
           if (typeof body.saved !== 'boolean') return reply(res, 400, null, '收藏状态无效');
