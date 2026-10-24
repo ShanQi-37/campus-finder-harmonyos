@@ -29,9 +29,13 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
 # 另一窗口编译
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-# 真实HTTP测试，三个文件均应执行
-& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs
+# 真实HTTP回归：37项（33个子测试及4个父测试）
+& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs
+# 直接加载实际 ArkTS 的接口校验与状态模型：12项
+& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\native-model.test.cjs
 ```
+
+模型测试使用本机 DevEco 自带 TypeScript 编译器，不复制生产实现；非默认安装位置设置 `DEVECO_PATH`，或通过 `TS_COMPILER_PATH` 指定编译器 JS 文件。应用及 HTTP Mock 运行本身无第三方依赖。
 
 脚本支持 `-DevEcoPath`。Hvigor不支持中文工程路径；构建脚本生成临时英文目录并把未签名HAP拷回outputs。用IDE打开脚本输出的英文目录，选择 `entry/src/main/ets/pages/Index.ets`，点击Previewer眼睛图标。先启动Mock；连接失败点“重新加载”。Previewer无需真机、完整模拟器或签名。
 
@@ -45,7 +49,7 @@ Previewer连接 `http://127.0.0.1:4524`。其他设备需另行配置端口映�
 
 ## 文档与评分
 
-[接口与状态机](docs/API.md) · [演示步骤](docs/DEMO.md) · [验证边界](docs/VALIDATION.md) · [要求核对](docs/ASSESSMENT.md)
+[系统检查与纠错](docs/AUDIT.md) · [接口与状态机](docs/API.md) · [演示步骤](docs/DEMO.md) · [验证边界](docs/VALIDATION.md) · [要求核对](docs/ASSESSMENT.md)
 
 | 项目 | 对应实现 |
 | --- | --- |
