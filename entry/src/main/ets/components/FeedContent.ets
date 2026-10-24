@@ -10,7 +10,7 @@ export struct FeedContent {
     Column({ space: 12 }) {
       if (this.filters) {
         Row({ space: 8 }) {
-          TextInput({ placeholder: '搜索物品、地点或线索', text: this.model.keyword }).height(42).fontSize(13)
+          TextInput({ placeholder: '搜索物品、地点或线索', text: this.model.keyword }).height(42).fontSize(13).maxLength(80)
             .backgroundColor('#FFFFFF').layoutWeight(1).onChange((value: string) => { this.model.keyword = value; })
             .onSubmit(() => { this.model.load(); })
           Button('搜索').height(40).fontSize(13).backgroundColor(Colors.green).onClick(() => { this.model.load(); })
@@ -32,7 +32,12 @@ export struct FeedContent {
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%').height(34)
       }
       if (this.model.phase !== 'ready') {
-        StatePanel({ phase: this.model.phase, error: this.model.error, onRetry: () => { this.model.load(); } }).layoutWeight(1)
+        StatePanel({ phase: this.model.phase, error: this.model.error, emptyAction: this.filters ? '清空筛选' : '刷新信息', onRetry: () => {
+          if (this.filters && this.model.phase === 'empty') {
+            this.model.keyword = ''; this.model.kind = 'all'; this.model.category = 'all';
+          }
+          this.model.load();
+        } }).layoutWeight(1)
       } else {
         List({ space: 12 }) {
           ForEach(this.model.items, (item: Item) => {

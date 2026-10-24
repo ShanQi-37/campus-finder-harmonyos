@@ -40,6 +40,7 @@ export struct StatePanel {
   @Param phase: string = 'loading';
   @Param error: string = '';
   @Param emptyText: string = '暂时没有匹配的信息';
+  @Param emptyAction: string = '刷新信息';
   @Event onRetry: () => void = () => {};
   build() {
     Column({ space: 10 }) {
@@ -51,7 +52,7 @@ export struct StatePanel {
         Text(this.phase === 'error' ? '暂时未能加载' : this.emptyText).fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
         Text(this.phase === 'error' ? this.error : '换个关键词或分类试试，也可以发布一条信息。')
           .fontSize(12).maxLines(2).fontColor(Colors.muted).textAlign(TextAlign.Center).padding({ left: 20, right: 20 })
-        Button(this.phase === 'error' ? '重新加载' : '刷新信息').height(36).fontColor('#FFFFFF').backgroundColor(Colors.green).onClick(() => this.onRetry())
+        Button(this.phase === 'error' ? '重新加载' : this.emptyAction).height(36).fontColor('#FFFFFF').backgroundColor(Colors.green).onClick(() => this.onRetry())
       }
     }.width('100%').padding({ top: 16, bottom: 16 }).justifyContent(FlexAlign.Center)
   }

@@ -57,6 +57,8 @@ DevEco 路径不同时，在脚本参数中指定 `-DevEcoPath`。使用 UTF-8 �
 - `service`：NetworkKit 请求、超时、状态码和解析异常处理。
 - `mock`：本机 HTTP 服务、JSON 持久化、动态统计和集成测试。
 
-接口与边界详见 [API.md](docs/API.md)，复现操作详见 [DEMO.md](docs/DEMO.md)。框架与 API 说明以华为官方文档和本机 SDK 为依据；UI 仅参考 FreeUID 的应用分类与卡片信息组织思路，页面、矢量图标与业务代码为本项目新写内容。
+接口与边界详见 [API.md](docs/API.md)，复现操作详见 [DEMO.md](docs/DEMO.md)，逐项要求与验证状态见 [ASSESSMENT.md](docs/ASSESSMENT.md)。框架与 API 说明以华为官方文档和本机 SDK 为依据；UI 仅参考 FreeUID 的应用分类与卡片信息组织思路，页面、矢量图标与业务代码为本项目新写内容。
+
+2026年10月24日复核优化：空结果可一键清空筛选；详情确认期间阻止提前返回；Mock拒绝非对象JSON和畸形ID，先持久化完整快照再更新内存。最新构建通过，HTTP测试8项通过、0项失败；空结果恢复已在Previewer实际复验。
 
 学校提交源码包排除 .hvigor、.git、.idea、oh_modules 与构建缓存；原始本地仓库独立保留。公开仓库不包含个人报告、Git bundle或本机日志。

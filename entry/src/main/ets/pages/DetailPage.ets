@@ -12,19 +12,21 @@ export struct DetailPage {
   private itemId: string = '';
   private changed: boolean = false;
   private active: boolean = true;
+  private generation: number = 0;
   async load(): Promise<void> {
-    this.phase = 'loading';
-    try { const result = await Api.detail(this.itemId); if (this.active) { this.item = result; this.phase = 'ready'; } }
-    catch (error) { if (this.active) { this.error = (error as Error).message; this.phase = 'error'; } }
+    const ticket = ++this.generation;
+    this.phase = 'loading'; this.error = '';
+    try { const result = await Api.detail(this.itemId); if (this.active && ticket === this.generation) { this.item = result; this.phase = 'ready'; } }
+    catch (error) { if (this.active && ticket === this.generation) { this.error = (error as Error).message; this.phase = 'error'; } }
   }
   async resolve(): Promise<void> {
     if (this.busy) { return; }
     this.busy = true; this.error = '';
-    try { this.item = await Api.resolve(this.itemId); this.changed = true; }
-    catch (error) { this.error = (error as Error).message; }
-    finally { this.busy = false; }
+    try { const result = await Api.resolve(this.itemId); if (this.active) { this.item = result; this.changed = true; } }
+    catch (error) { if (this.active) { this.error = (error as Error).message; } }
+    finally { if (this.active) { this.busy = false; } }
   }
-  back(): void { this.stack.pop({ changed: this.changed }); }
+  back(): void { if (!this.busy) { this.stack.pop({ changed: this.changed }); } }
   build() {
     NavDestination() {
       Column() {
@@ -76,6 +78,6 @@ export struct DetailPage {
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack; this.itemId = context.pathInfo.param as string; this.active = true; this.load();
-    }).onBackPressed(() => { this.back(); return true; }).onDisAppear(() => { this.active = false; })
+    }).onBackPressed(() => { this.back(); return true; }).onDisAppear(() => { this.active = false; this.generation++; })
   }
 }
