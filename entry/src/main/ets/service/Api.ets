@@ -1,5 +1,5 @@
 import { http } from '@kit.NetworkKit';
-import { Claim, ClaimInput, ClaimList, Item, ItemList, PublishInput, Statistics } from '../model/Models';
+import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, PersonalSummary, PublishInput, Statistics } from '../model/Models';
 import { Session } from '../model/Session';
 interface Envelope<T> { code: number; message: string; data: T; }
 export const BASE_URL: string = 'http://127.0.0.1:4524';
@@ -45,6 +45,22 @@ export class Api {
     return data;
   }
   static review(id: string, action: string): Promise<Claim> { return Api.request<Claim>('/api/claims/' + encodeURIComponent(id) + '/' + action, '{}'); }
+  static async matches(id: string): Promise<MatchList> {
+    const data = await Api.request<MatchList>('/api/items/' + encodeURIComponent(id) + '/matches');
+    if (!Array.isArray(data.matches) || data.matches.some((lead) => !lead.item || typeof lead.item.id !== 'string' || !Array.isArray(lead.reasons))) { throw new Error('返回线索格式异常'); }
+    return data;
+  }
+  static async draft(): Promise<DraftState> {
+    const data = await Api.request<DraftState>('/api/draft');
+    if (typeof data.exists !== 'boolean' || (data.exists && (!data.input || typeof data.input.requestId !== 'string'))) { throw new Error('返回草稿格式异常'); }
+    return data;
+  }
+  static saveDraft(input: PublishInput): Promise<DraftState> { return Api.request<DraftState>('/api/draft', JSON.stringify(input)); }
+  static async me(): Promise<PersonalSummary> {
+    const data = await Api.request<PersonalSummary>('/api/me');
+    if (![data.posted, data.open, data.resolved, data.saved, data.incomingPending, data.outgoingPending].every((n: number) => Number.isFinite(n) && n >= 0) || typeof data.draftTitle !== 'string') { throw new Error('返回任务格式异常'); }
+    return data;
+  }
   static async statistics(days: number = 7, category: string = 'all'): Promise<Statistics> {
     const data = await Api.request<Statistics>('/api/statistics?days=' + days + '&category=' + encodeURIComponent(category));
     if (!Array.isArray(data.categories) || !Array.isArray(data.trend) || !Number.isFinite(data.total) || !Number.isFinite(data.recoveryRate) || data.trend.some((p) => !Number.isFinite(p.count))) { throw new Error('返回统计格式异常'); }

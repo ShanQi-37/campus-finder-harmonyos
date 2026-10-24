@@ -1,6 +1,7 @@
 import { CATEGORY_OPTIONS, CATEGORIES, Statistics, emptyStatistics } from '../model/Models';
 import { Api } from '../service/Api';
 import { ChoiceChip, Colors, PageHeader, StatePanel } from '../components/Common';
+import { BottomNav } from '../components/BottomNav';
 import { CategoryChart, RecoveryChart, TrendChart } from '../components/Charts';
 @ComponentV2
 export struct StatisticsPage {
@@ -18,15 +19,21 @@ export struct StatisticsPage {
     catch (error) { if (ticket !== this.generation) { return; } this.error = (error as Error).message; this.phase = 'error'; }
   }
   aboutToDisappear(): void { this.generation++; }
+  navigate(route: string): void {
+    if (route === 'Statistics') { this.load(); }
+    else if (route === 'Home') { this.stack.clear(); }
+    else if (route === 'Publish') { this.stack.pushPath({ name: 'Publish', param: '' }); }
+    else { this.stack.replacePath({ name: route, param: '' }); }
+  }
   @Builder
   metric(label: string, value: number, accent: boolean) {
     Row() {
       Column({ space: 5 }) {
-        Text(label).fontSize(10).fontColor(accent ? '#C7DDCC' : Colors.muted)
+        Text(label).fontSize(11).fontColor(accent ? '#C7DDCC' : Colors.muted)
         Text(value.toString()).fontSize(27).fontWeight(FontWeight.Bold).fontColor(accent ? '#FFF5DD' : Colors.green)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Text(accent ? '↗' : '·').fontSize(25).fontColor(accent ? '#DCBE78' : '#BCCFBE')
-    }.width('100%').height(76).padding(14).backgroundColor(accent ? '#1A6254' : '#FFFFFF').borderRadius(16)
+    }.width('100%').height(67).padding(12).backgroundColor(accent ? '#1A6254' : '#FFFFFF').borderRadius(16)
   }
   build() {
     NavDestination() {
@@ -51,7 +58,7 @@ export struct StatisticsPage {
                 GridItem() { this.metric('已寻回', this.data.resolved, false) }
                 GridItem() { this.metric('等待重逢', this.data.open, false) }
                 GridItem() { this.metric('待核对申请', this.data.pendingClaims, false) }
-              }.columnsTemplate('1fr 1fr').columnsGap(10).rowsGap(10).height(162).width('100%')
+              }.columnsTemplate('1fr 1fr').columnsGap(10).rowsGap(10).height(144).width('100%')
               Row({ space: 7 }) {
                 ChoiceChip({ label: '寻回概览', selected: this.chart === 'overview', onSelect: () => { this.chart = 'overview'; } })
                 ChoiceChip({ label: '类别分布', selected: this.chart === 'category', onSelect: () => { this.chart = 'category'; } })
@@ -64,6 +71,7 @@ export struct StatisticsPage {
             }.width('100%').padding({ left: 18, right: 18, bottom: 20 })
           }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
         }
+        BottomNav({ active: 'Statistics', onNavigate: (route: string) => this.navigate(route) })
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; }).onShown(() => { this.load(); })
   }

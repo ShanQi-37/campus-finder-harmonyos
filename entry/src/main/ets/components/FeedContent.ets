@@ -19,15 +19,22 @@ export struct FeedContent {
           ChoiceChip({ label: '我丢了', selected: this.model.kind === 'lost', onSelect: () => { this.model.kind = 'lost'; this.model.load(); } })
           ChoiceChip({ label: '我捡到', selected: this.model.kind === 'found', onSelect: () => { this.model.kind = 'found'; this.model.load(); } })
           Blank()
-          Text('重置').fontSize(11).fontColor(Colors.green).padding(6).onClick(() => this.model.reset())
+          Text('重置').fontSize(12).fontColor(Colors.green).padding(6).onClick(() => this.model.reset())
         }.width('100%').padding({ left: 18, right: 18 })
         Row({ space: 6 }) {
-          Select(CATEGORY_OPTIONS).value(this.model.category === 'all' ? '全部分类' : this.model.category).selected(CATEGORIES.indexOf(this.model.category) + 1).font({ size: 11 }).height(30).backgroundColor('#E9EFEB').layoutWeight(1)
+          Select(CATEGORY_OPTIONS).value(this.model.category === 'all' ? '全部分类' : this.model.category).selected(CATEGORIES.indexOf(this.model.category) + 1).font({ size: 12 }).height(30).backgroundColor('#E9EFEB').layoutWeight(1)
             .onSelect((index: number) => { this.model.category = index === 0 ? 'all' : CATEGORIES[index - 1]; this.model.load(); })
-          Select(STATUS_OPTIONS).value(this.model.status === 'all' ? '全部状态' : (this.model.status === 'open' ? '待寻回' : '已寻回')).font({ size: 11 }).height(30).backgroundColor('#E9EFEB').layoutWeight(1)
+          Select(STATUS_OPTIONS).value(this.model.status === 'all' ? '全部状态' : (this.model.status === 'open' ? '待寻回' : '已寻回')).font({ size: 12 }).height(30).backgroundColor('#E9EFEB').layoutWeight(1)
             .onSelect((index: number) => { this.model.status = index === 0 ? 'all' : (index === 1 ? 'open' : 'resolved'); this.model.load(); })
           Text(this.model.sort === 'latest' ? '最新 ↓' : '最早 ↑').fontSize(11).fontColor(Colors.green).padding(6).onClick(() => { this.model.sort = this.model.sort === 'latest' ? 'oldest' : 'latest'; this.model.load(); })
         }.padding({ left: 18, right: 18 }).width('100%')
+      }
+      if (this.filters && this.model.phase === 'ready') {
+        Row() {
+          Text('校园线索').fontSize(13).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
+          Blank()
+          Text(this.model.total + ' 条结果 · 已同步').fontSize(10).fontColor(Colors.muted)
+        }.width('100%').padding({ left: 20, right: 20 })
       }
       if (this.model.phase !== 'ready') {
         StatePanel({ phase: this.model.phase, error: this.model.error, emptyAction: this.filters ? '清空筛选' : '刷新信息', onRetry: () => { if (this.filters && this.model.phase === 'empty') { this.model.reset(); } else { this.model.load(); } } }).layoutWeight(1)

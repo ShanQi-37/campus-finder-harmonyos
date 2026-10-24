@@ -4,7 +4,7 @@ export class Colors {
   static green: string = '#17685B';
   static soft: string = '#E4F0E9';
   static paper: string = '#F4F6F2';
-  static muted: string = '#778A83';
+  static muted: string = '#687D75';
   static gold: string = '#EDBA65';
   static red: string = '#BA563E';
 }
@@ -16,6 +16,7 @@ export function categoryArt(category: string): Resource {
 }
 export function statusText(status: string): string { return status === 'resolved' ? '已寻回' : (status === 'withdrawn' ? '已撤回' : '待寻回'); }
 export function claimText(status: string): string { return status === 'accepted' ? '已通过' : (status === 'rejected' ? '未通过' : (status === 'cancelled' ? '已取消' : '待核对')); }
+export function claimColor(status: string): string { return status === 'accepted' ? Colors.green : (status === 'rejected' ? Colors.red : (status === 'cancelled' ? Colors.muted : '#A17C3C')); }
 @ComponentV2
 export struct PageHeader {
   @Param title: string = '';
@@ -26,11 +27,11 @@ export struct PageHeader {
     Row({ space: 10 }) {
       if (this.back) { Button('‹').fontSize(30).fontColor(Colors.green).backgroundColor('#FFFFFF').width(36).height(36).borderRadius(12).onClick(() => this.onBack()) }
       Column({ space: 3 }) {
-        Text(this.title).fontSize(22).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
+        Text(this.title).fontSize(21).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
         if (this.subtitle.length) { Text(this.subtitle).fontSize(10).fontColor(Colors.muted).maxLines(1) }
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Image($r('app.media.app_icon')).width(34).height(34).borderRadius(12)
-    }.width('100%').height(76).padding({ left: 18, right: 18, top: 10, bottom: 10 })
+    }.width('100%').height(68).padding({ left: 18, right: 18, top: 8, bottom: 8 })
   }
 }
 @ComponentV2
@@ -71,18 +72,18 @@ export struct ItemCard {
   @Event onOpen: (id: string) => void = () => {};
   build() {
     Row({ space: 12 }) {
-      Image(categoryArt(this.item.category)).width(76).height(88).objectFit(ImageFit.Contain).backgroundColor(this.item.kind === 'found' ? '#EEF4E8' : '#FFF3DF').borderRadius(15)
+      Image(categoryArt(this.item.category)).width(70).height(84).objectFit(ImageFit.Contain).backgroundColor(this.item.kind === 'found' ? '#EEF4E8' : '#FFF3DF').borderRadius(15)
       Column({ space: 7 }) {
         Row({ space: 6 }) {
-          Text(this.item.kind === 'found' ? '拾物招领' : '寻物启事').fontSize(9).fontColor(Colors.green).backgroundColor(Colors.soft).padding({ left: 6, right: 6, top: 3, bottom: 3 }).borderRadius(4)
+          Text(this.item.kind === 'found' ? '拾物招领' : '寻物启事').fontSize(10).fontColor(Colors.green).backgroundColor(Colors.soft).padding({ left: 6, right: 6, top: 3, bottom: 3 }).borderRadius(4)
           Blank()
           Text(statusText(this.item.status)).fontSize(10).fontColor(this.item.status === 'resolved' ? Colors.green : '#B5873E')
         }.width('100%')
-        Text(this.item.title).fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-        Text('⌖ ' + this.item.location + ' · ' + this.item.occurredAt.slice(5)).fontSize(10).fontColor(Colors.muted).maxLines(1)
+        Text(this.item.title).fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(this.item.location + ' · ' + this.item.occurredAt.slice(5)).fontSize(11).fontColor(Colors.muted).maxLines(1)
         Text(this.item.saved ? '★ 已收藏  ·  查看线索  ›' : this.item.category + '  ·  查看线索  ›').fontSize(10).fontColor(Colors.green)
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }.width('100%').padding(12).backgroundColor('#FFFFFF').borderRadius(18)
-      .border({ width: 1, color: '#EAF0E9' }).onClick(() => this.onOpen(this.item.id)).accessibilityText(this.item.title)
+      .border({ width: 1, color: '#E2E9E1' }).onClick(() => this.onOpen(this.item.id)).accessibilityText(this.item.title)
   }
 }

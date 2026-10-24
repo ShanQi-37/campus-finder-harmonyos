@@ -1,6 +1,6 @@
 import { Claim } from '../model/Models';
 import { Api } from '../service/Api';
-import { categoryArt, claimText, ChoiceChip, Colors, PageHeader, StatePanel } from '../components/Common';
+import { categoryArt, claimColor, claimText, ChoiceChip, Colors, PageHeader, StatePanel } from '../components/Common';
 @ComponentV2
 export struct ClaimCenterPage {
   @Local claims: Claim[] = [];
@@ -54,7 +54,7 @@ export struct ClaimCenterPage {
                       Text(claim.itemTitle).fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(2)
                       Text((this.boxDirection === 'received' ? claim.senderName : claim.ownerName) + ' · ' + (claim.kind === 'found' ? '认领申请' : '寻物线索')).fontSize(10).fontColor(Colors.muted)
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                    Text(claimText(claim.status)).fontSize(10).fontColor(claim.status === 'pending' ? '#B18435' : Colors.green)
+                    Text(claimText(claim.status)).fontSize(10).fontColor(claimColor(claim.status))
                   }.width('100%').onClick(() => { this.stack.pushPath({ name: 'Detail', param: claim.itemId }); })
                   Divider().color('#EDF0E9')
                   Text(claim.proof).fontSize(13).lineHeight(21).fontColor('#526F63').width('100%')

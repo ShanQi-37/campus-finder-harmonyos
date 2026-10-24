@@ -1,7 +1,7 @@
-import { Item, TimelineEvent, emptyItem } from '../model/Models';
+import { Item, MatchLead, TimelineEvent, emptyItem } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
-import { categoryArt, Colors, PageHeader, StatePanel, statusText, ChoiceChip } from '../components/Common';
+import { categoryArt, Colors, ItemCard, PageHeader, StatePanel, statusText, ChoiceChip } from '../components/Common';
 @ComponentV2
 export struct DetailPage {
   @Local item: Item = emptyItem();
@@ -9,6 +9,10 @@ export struct DetailPage {
   @Local error: string = '';
   @Local section: string = 'info';
   @Local busy: boolean = false;
+  @Local leads: MatchLead[] = [];
+  @Local matchPhase: string = 'loading';
+  @Local matchError: string = '';
+  private matchGeneration: number = 0;
   private stack: NavPathStack = new NavPathStack();
   private itemId: string = '';
   private changed: boolean = false;
@@ -22,9 +26,14 @@ export struct DetailPage {
   }
   async action(action: string): Promise<void> {
     if (this.busy) { return; } this.busy = true; this.error = '';
-    try { const result = action === 'favorite' ? await Api.favorite(this.itemId, !this.item.saved) : await Api.action(this.itemId, action); if (this.active) { this.item = result; this.changed = true; } }
+    try { const result = action === 'favorite' ? await Api.favorite(this.itemId, !this.item.saved) : await Api.action(this.itemId, action); if (this.active) { this.item = result; this.changed = true; if (this.section === 'matches') { this.loadMatches(); } } }
     catch (error) { if (this.active) { this.error = (error as Error).message; } }
     finally { if (this.active) { this.busy = false; } }
+  }
+  async loadMatches(): Promise<void> {
+    this.section = 'matches'; const ticket = ++this.matchGeneration; this.matchPhase = 'loading'; this.matchError = '';
+    try { const result = await Api.matches(this.itemId); if (this.active && ticket === this.matchGeneration) { this.leads = result.matches; this.matchPhase = result.matches.length ? 'ready' : 'empty'; } }
+    catch (error) { if (this.active && ticket === this.matchGeneration) { this.matchError = (error as Error).message; this.matchPhase = 'error'; } }
   }
   confirm(action: string): void {
     this.getUIContext().showAlertDialog({ title: action === 'resolve' ? '已核对并完成交接？' : '确定撤回这条启事？',
@@ -50,8 +59,7 @@ export struct DetailPage {
           Row({ space: 8 }) {
             ChoiceChip({ label: '物品信息', selected: this.section === 'info', onSelect: () => { this.section = 'info'; } })
             ChoiceChip({ label: '动态记录', selected: this.section === 'history', onSelect: () => { this.section = 'history'; } })
-            Blank()
-            Text(this.item.category).fontSize(10).fontColor(Colors.muted)
+            ChoiceChip({ label: '相似线索', selected: this.section === 'matches', onSelect: () => { this.loadMatches(); } })
           }.width('100%').padding({ left: 18, right: 18 })
           Scroll() {
             Column({ space: 14 }) {
@@ -67,6 +75,18 @@ export struct DetailPage {
                   Text(this.item.contact).fontSize(12).fontColor(Colors.muted).lineHeight(20).width('100%')
                   Text('请勿提供密码、付款或公开完整证件号码。').fontSize(10).fontColor('#A88449').width('100%')
                 }.padding(16).backgroundColor('#FFF6E6').borderRadius(16).width('100%')
+              } else if (this.section === 'matches') {
+                Text('同类物品、相反启事类型；优先展示相近地点和日期。线索仅供核对，不代表认领结果。').fontSize(11).lineHeight(19).fontColor(Colors.muted).width('100%')
+                if (this.matchPhase !== 'ready') {
+                  StatePanel({ phase: this.matchPhase, error: this.matchError, emptyText: this.item.status === 'open' ? '暂未找到可核对的相似线索' : '启事已结束，无需继续匹配', onRetry: () => { this.loadMatches(); } })
+                } else {
+                  ForEach(this.leads, (lead: MatchLead) => {
+                    Column({ space: 6 }) {
+                      Text(lead.reasons.join(' · ')).fontSize(11).fontColor(Colors.green).width('100%').padding({ left: 5 })
+                      ItemCard({ item: lead.item, onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } })
+                    }.width('100%')
+                  }, (lead: MatchLead) => lead.item.id)
+                }
               } else {
                 ForEach(this.item.history, (entry: TimelineEvent) => {
                   Row({ space: 12 }) {
@@ -104,7 +124,7 @@ export struct DetailPage {
         }
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; this.itemId = context.pathInfo.param as string; })
-      .onShown(() => { this.active = true; this.load(); }).onHidden(() => { this.active = false; this.generation++; })
+      .onShown(() => { this.active = true; this.load(); if (this.section === 'matches') { this.loadMatches(); } }).onHidden(() => { this.active = false; this.generation++; this.matchGeneration++; })
       .onBackPressed(() => { this.back(); return true; })
   }
 }

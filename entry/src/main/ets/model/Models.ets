@@ -18,6 +18,11 @@ export interface Claim {
   senderName: string; ownerName: string; proof: string; contact: string; status: string; createdAt: string; updatedAt: string;
 }
 export interface ClaimList { claims: Claim[]; pending: number; }
+export interface MatchLead { item: Item; reasons: string[]; }
+export interface MatchList { matches: MatchLead[]; }
+export interface DraftState { exists: boolean; input: PublishInput | null; updatedAt: string; }
+export interface PersonalSummary { posted: number; open: number; resolved: number; saved: number; incomingPending: number; outgoingPending: number; draftTitle: string; draftUpdatedAt: string; }
+export function emptySummary(): PersonalSummary { return { posted: 0, open: 0, resolved: 0, saved: 0, incomingPending: 0, outgoingPending: 0, draftTitle: '', draftUpdatedAt: '' }; }
 export const CATEGORIES: string[] = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 export const CATEGORY_OPTIONS: SelectOption[] = [{ value: '全部分类' }, { value: '证件卡片' }, { value: '电子数码' }, { value: '生活用品' }, { value: '学习文具' }];
 export const STATUS_OPTIONS: SelectOption[] = [{ value: '全部状态' }, { value: '待寻回' }, { value: '已寻回' }];

@@ -25,7 +25,7 @@ export class FeedModel {
       const result = await Api.list(this.kind, this.category, this.keyword, this.owner, this.status, this.sort, this.saved, this.page);
       // Requests are tagged so older results cannot overwrite a newer choice.
       if (ticket !== this.generation) { return; }
-      this.items = result.items; this.total = result.total; this.hasMore = result.hasMore;
+      this.items = result.items; this.total = result.total; this.hasMore = result.hasMore; this.page = result.page;
       this.phase = result.items.length ? 'ready' : 'empty'; this.updated = new Date().toLocaleTimeString();
     } catch (error) {
       if (ticket !== this.generation) { return; }
