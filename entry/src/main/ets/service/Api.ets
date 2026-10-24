@@ -1,42 +1,53 @@
 import { http } from '@kit.NetworkKit';
-import { Item, ItemList, PublishInput, Statistics } from '../model/Models';
+import { Claim, ClaimInput, ClaimList, Item, ItemList, PublishInput, Statistics } from '../model/Models';
+import { Session } from '../model/Session';
 interface Envelope<T> { code: number; message: string; data: T; }
-// Previewer runs on the host. A simulator needs hdc rport tcp:4524 tcp:4524.
 export const BASE_URL: string = 'http://127.0.0.1:4524';
 export class Api {
   private static async request<T>(path: string, body?: string): Promise<T> {
     const client = http.createHttp();
+    let businessMessage: string = '';
     try {
       const response = await client.request(BASE_URL + path, {
         method: body === undefined ? http.RequestMethod.GET : http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json' },
+        header: { 'Content-Type': 'application/json', 'X-Demo-User': Session.actor },
         extraData: body ?? '', expectDataType: http.HttpDataType.STRING,
         connectTimeout: 4000, readTimeout: 6000, usingCache: false
       });
-      if (response.responseCode < 200 || response.responseCode >= 300) {
-        if (response.responseCode === 404) { throw new Error('信息已移除，请返回刷新'); }
-        throw new Error('服务暂不可用，请稍后重试');
-      }
       const envelope = JSON.parse(response.result as string) as Envelope<T>;
-      if (envelope.code !== 0 || envelope.data === undefined || envelope.data === null) { throw new Error('返回数据不完整，请重试'); }
+      if (response.responseCode < 200 || response.responseCode >= 300 || envelope.code !== 0) {
+        businessMessage = typeof envelope.message === 'string' ? envelope.message : '服务暂不可用，请稍后重试';
+        throw new Error(businessMessage);
+      }
+      if (envelope.data === undefined || envelope.data === null) { throw new Error('返回数据不完整'); }
       return envelope.data;
     } catch (error) {
-      const message: string = (error as Error).message ?? '';
-      if (message.startsWith('信息') || message.startsWith('服务') || message.startsWith('返回')) { throw new Error(message); }
-      throw new Error('连接失败或数据异常，请检查网络后重试');
+      throw new Error(businessMessage.length ? businessMessage : '连接失败或数据异常，请检查网络后重试');
     } finally { client.destroy(); }
   }
-  static async list(kind: string, category: string, keyword: string, owner: string = ''): Promise<ItemList> {
-    const data = await Api.request<ItemList>('/api/items?kind=' + encodeURIComponent(kind) + '&category=' + encodeURIComponent(category) + '&keyword=' + encodeURIComponent(keyword) + '&owner=' + encodeURIComponent(owner));
-    if (!Array.isArray(data.items) || typeof data.total !== 'number') { throw new Error('返回列表格式异常'); }
+  static async list(kind: string, category: string, keyword: string, owner: string = '', status: string = 'all', sort: string = 'latest', saved: boolean = false, page: number = 1): Promise<ItemList> {
+    const data = await Api.request<ItemList>('/api/items?kind=' + encodeURIComponent(kind) + '&category=' + encodeURIComponent(category) + '&keyword=' + encodeURIComponent(keyword) + '&owner=' + encodeURIComponent(owner) + '&status=' + encodeURIComponent(status) + '&sort=' + sort + '&saved=' + saved + '&pageSize=2&page=' + page);
+    if (!Array.isArray(data.items) || !Number.isFinite(data.total) || typeof data.hasMore !== 'boolean' || data.items.some((i: Item) => typeof i.id !== 'string' || typeof i.title !== 'string' || !Array.isArray(i.history))) { throw new Error('返回列表格式异常'); }
     return data;
   }
-  static detail(id: string): Promise<Item> { return Api.request<Item>('/api/items/' + encodeURIComponent(id)); }
-  static publish(input: PublishInput): Promise<Item> { return Api.request<Item>('/api/items', JSON.stringify(input)); }
-  static resolve(id: string): Promise<Item> { return Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/resolve', '{}'); }
-  static async statistics(): Promise<Statistics> {
-    const data = await Api.request<Statistics>('/api/statistics');
-    if (!Array.isArray(data.categories) || !Array.isArray(data.trend) || typeof data.total !== 'number') { throw new Error('返回统计格式异常'); }
+  static async detail(id: string): Promise<Item> {
+    const data = await Api.request<Item>('/api/items/' + encodeURIComponent(id));
+    if (typeof data.id !== 'string' || typeof data.title !== 'string' || !Array.isArray(data.history)) { throw new Error('返回详情格式异常'); }
+    return data;
+  }
+  static publish(input: PublishInput, id: string = ''): Promise<Item> { return Api.request<Item>('/api/items' + (id.length ? '/' + encodeURIComponent(id) + '/update' : ''), JSON.stringify(input)); }
+  static action(id: string, action: string): Promise<Item> { return Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/' + action, '{}'); }
+  static favorite(id: string, saved: boolean): Promise<Item> { return Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/favorite', JSON.stringify({ saved: saved })); }
+  static claim(id: string, input: ClaimInput): Promise<Claim> { return Api.request<Claim>('/api/items/' + encodeURIComponent(id) + '/claims', JSON.stringify(input)); }
+  static async claims(direction: string): Promise<ClaimList> {
+    const data = await Api.request<ClaimList>('/api/claims?direction=' + direction);
+    if (!Array.isArray(data.claims) || !Number.isFinite(data.pending)) { throw new Error('返回申请格式异常'); }
+    return data;
+  }
+  static review(id: string, action: string): Promise<Claim> { return Api.request<Claim>('/api/claims/' + encodeURIComponent(id) + '/' + action, '{}'); }
+  static async statistics(days: number = 7, category: string = 'all'): Promise<Statistics> {
+    const data = await Api.request<Statistics>('/api/statistics?days=' + days + '&category=' + encodeURIComponent(category));
+    if (!Array.isArray(data.categories) || !Array.isArray(data.trend) || !Number.isFinite(data.total) || !Number.isFinite(data.recoveryRate) || data.trend.some((p) => !Number.isFinite(p.count))) { throw new Error('返回统计格式异常'); }
     return data;
   }
 }

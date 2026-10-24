@@ -31,18 +31,16 @@ export struct TrendChart {
   }
   build() {
     Column({ space: 14 }) {
-      Row() { Text('近七日发布趋势').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink); Blank(); Text('单位：条').fontSize(11).fontColor(Colors.muted) }.width('100%')
-      Row() {
-        ForEach(this.points, (p: CountPoint) => { Text(p.count.toString()).fontSize(12).fontColor(Colors.green).layoutWeight(1).textAlign(TextAlign.Center) }, (p: CountPoint) => p.label)
-      }.width('100%')
+      Row() { Text('近' + this.points.length + '日发布趋势').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink); Blank(); Text('单位：条').fontSize(11).fontColor(Colors.muted) }.width('100%')
+      Text('单日峰值 ' + Math.max(0, ...this.points.map((p: CountPoint) => p.count)) + ' 条 · 区间合计 ' + this.points.reduce((sum: number, p: CountPoint) => sum + p.count, 0) + ' 条').fontSize(11).fontColor(Colors.green).width('100%')
       Stack({ alignContent: Alignment.TopStart }) {
         Column() { Divider().color('#EFF2EA'); Blank(); Divider().color('#EFF2EA'); Blank(); Divider().color('#D5DECE') }.height(110).width('100%')
         Polyline().points(this.coordinates()).stroke('#447C60').strokeWidth(3).fillOpacity(0).width('100%').height(120)
       }.width('100%').height(120).onAreaChange((_oldArea: Area, newArea: Area) => { this.chartWidth = Number(newArea.width); })
       Row() {
-        ForEach(this.points, (p: CountPoint) => { Text(p.label.slice(3)).fontSize(10).fontColor(Colors.muted).layoutWeight(1).textAlign(TextAlign.Center) }, (p: CountPoint) => p.label)
+        ForEach(this.points.filter((_p: CountPoint, index: number) => index === 0 || index === this.points.length - 1 || index % Math.ceil(this.points.length / 5) === 0), (p: CountPoint) => { Text(p.label).fontSize(9).fontColor(Colors.muted).layoutWeight(1).textAlign(TextAlign.Center) }, (p: CountPoint) => p.label)
       }.width('100%')
-      Text('横轴为日期，纵轴为当日发布数量').fontSize(11).fontColor(Colors.muted).width('100%')
+      Text('横轴：日期 · 纵轴：有效启事数量').fontSize(11).fontColor(Colors.muted).width('100%')
     }.width('100%').padding(20).backgroundColor('#FFFFFF').borderRadius(20)
   }
 }

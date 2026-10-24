@@ -1,4 +1,4 @@
-import { Statistics, emptyStatistics } from '../model/Models';
+import { CATEGORY_OPTIONS, CATEGORIES, Statistics, emptyStatistics } from '../model/Models';
 import { Api } from '../service/Api';
 import { ChoiceChip, Colors, PageHeader, StatePanel } from '../components/Common';
 import { CategoryChart, RecoveryChart, TrendChart } from '../components/Charts';
@@ -8,58 +8,61 @@ export struct StatisticsPage {
   @Local phase: string = 'loading';
   @Local error: string = '';
   @Local chart: string = 'overview';
+  @Local days: number = 7;
+  @Local category: string = 'all';
   private stack: NavPathStack = new NavPathStack();
   private generation: number = 0;
   async load(): Promise<void> {
-    const ticket = ++this.generation;
-    this.phase = 'loading';
-    try {
-      const data = await Api.statistics();
-      if (ticket !== this.generation) { return; }
-      this.data = data; this.phase = data.total ? 'ready' : 'empty';
-    } catch (error) {
-      if (ticket !== this.generation) { return; }
-      this.error = (error as Error).message; this.phase = 'error';
-    }
+    const ticket = ++this.generation; this.phase = 'loading';
+    try { const data = await Api.statistics(this.days, this.category); if (ticket !== this.generation) { return; } this.data = data; this.phase = data.total ? 'ready' : 'empty'; }
+    catch (error) { if (ticket !== this.generation) { return; } this.error = (error as Error).message; this.phase = 'error'; }
   }
   aboutToDisappear(): void { this.generation++; }
   @Builder
-  metric(label: string, value: number) {
-    Column({ space: 8 }) {
-      Text(value.toString()).fontSize(29).fontWeight(FontWeight.Bold).fontColor(Colors.green)
-      Text(label).fontSize(11).fontColor(Colors.muted)
-    }.width('100%').height(88).justifyContent(FlexAlign.Center).backgroundColor('#E6EDDE').borderRadius(16)
+  metric(label: string, value: number, accent: boolean) {
+    Row() {
+      Column({ space: 5 }) {
+        Text(label).fontSize(10).fontColor(accent ? '#C7DDCC' : Colors.muted)
+        Text(value.toString()).fontSize(27).fontWeight(FontWeight.Bold).fontColor(accent ? '#FFF5DD' : Colors.green)
+      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      Text(accent ? '↗' : '·').fontSize(25).fontColor(accent ? '#DCBE78' : '#BCCFBE')
+    }.width('100%').height(76).padding(14).backgroundColor(accent ? '#1A6254' : '#FFFFFF').borderRadius(16)
   }
   build() {
     NavDestination() {
-      Column() {
-        PageHeader({ title: '校园互助统计', subtitle: '每一条线索，都值得被看见', back: true, onBack: () => { this.stack.pop(); } })
+      Column({ space: 10 }) {
+        PageHeader({ title: '校园互助统计', subtitle: '把善意化成可见的校园温度', back: true, onBack: () => { this.stack.pop(); } })
+        Row({ space: 7 }) {
+          ForEach([7, 14, 30], (days: number) => { ChoiceChip({ label: days + '日', selected: this.days === days, onSelect: () => { this.days = days; this.load(); } }) }, (days: number) => days.toString())
+          Select(CATEGORY_OPTIONS).value(this.category === 'all' ? '全部分类' : this.category).font({ size: 10 }).height(32).layoutWeight(1).backgroundColor('#E4ECE4')
+            .onSelect((index: number) => { this.category = index === 0 ? 'all' : CATEGORIES[index - 1]; this.load(); })
+        }.width('100%').padding({ left: 18, right: 18 })
         Row() {
-          Text(this.phase === 'ready' ? '更新于 ' + new Date(this.data.updatedAt).toLocaleTimeString() : '正在同步校园互助记录').fontSize(11).fontColor(Colors.muted)
-          Blank()
-          Button('刷新数据').fontSize(12).height(34).backgroundColor(Colors.green).enabled(this.phase !== 'loading').onClick(() => { this.load(); })
-        }.padding({ left: 20, right: 20, bottom: 15 }).width('100%')
+          Text('按启事发布日期筛选 · 不含已撤回').fontSize(10).fontColor(Colors.muted).layoutWeight(1)
+          Text('刷新 ↻').fontSize(11).fontColor(Colors.green).padding(6).onClick(() => { this.load(); })
+        }.width('100%').padding({ left: 18, right: 18 })
         if (this.phase !== 'ready') {
-          StatePanel({ phase: this.phase, error: this.error, emptyText: '还没有可统计的互助记录', onRetry: () => { this.load(); } })
+          StatePanel({ phase: this.phase, error: this.error, emptyText: '所选范围暂无有效启事', emptyAction: '恢复全部分类', onRetry: () => { if (this.phase === 'empty') { this.category = 'all'; this.days = 30; } this.load(); } }).layoutWeight(1)
         } else {
-          Row({ space: 10 }) {
-            ChoiceChip({ label: '寻回概览', selected: this.chart === 'overview', onSelect: () => { this.chart = 'overview'; } })
-            ChoiceChip({ label: '类别分布', selected: this.chart === 'category', onSelect: () => { this.chart = 'category'; } })
-            ChoiceChip({ label: '七日趋势', selected: this.chart === 'trend', onSelect: () => { this.chart = 'trend'; } })
-          }.width('100%').padding({ left: 20, right: 20, bottom: 15 })
           Scroll() {
-            Column({ space: 16 }) {
+            Column({ space: 12 }) {
               Grid() {
-                GridItem() { this.metric('全部信息', this.data.total) }
-                GridItem() { this.metric('待寻回', this.data.open) }
-                GridItem() { this.metric('已寻回', this.data.resolved) }
-              }.columnsTemplate('1fr 1fr 1fr').columnsGap(10).height(88).width('100%')
+                GridItem() { this.metric('有效启事', this.data.total, true) }
+                GridItem() { this.metric('已寻回', this.data.resolved, false) }
+                GridItem() { this.metric('等待重逢', this.data.open, false) }
+                GridItem() { this.metric('待核对申请', this.data.pendingClaims, false) }
+              }.columnsTemplate('1fr 1fr').columnsGap(10).rowsGap(10).height(162).width('100%')
+              Row({ space: 7 }) {
+                ChoiceChip({ label: '寻回概览', selected: this.chart === 'overview', onSelect: () => { this.chart = 'overview'; } })
+                ChoiceChip({ label: '类别分布', selected: this.chart === 'category', onSelect: () => { this.chart = 'category'; } })
+                ChoiceChip({ label: '发布趋势', selected: this.chart === 'trend', onSelect: () => { this.chart = 'trend'; } })
+              }.width('100%')
               if (this.chart === 'overview') { RecoveryChart({ data: this.data }) }
               else if (this.chart === 'category') { CategoryChart({ points: this.data.categories }) }
               else { TrendChart({ points: this.data.trend }) }
-              Text('统计来自当前校园演示记录，发布和寻回后会重新计算。').fontSize(11).fontColor(Colors.muted).lineHeight(19)
-            }.width('100%').padding({ left: 20, right: 20, bottom: 30 })
-          }.layoutWeight(1).scrollBar(BarState.Off)
+              Text('寻物 ' + this.data.lost + ' 条 · 招领 ' + this.data.found + ' 条 · 已撤回 ' + this.data.withdrawn + ' 条\n更新于 ' + new Date(this.data.updatedAt).toLocaleTimeString()).fontSize(10).fontColor(Colors.muted).lineHeight(18).width('100%')
+            }.width('100%').padding({ left: 18, right: 18, bottom: 20 })
+          }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
         }
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; }).onShown(() => { this.load(); })

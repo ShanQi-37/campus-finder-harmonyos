@@ -1,68 +1,64 @@
 import { FeedModel } from '../model/FeedModel';
+import { Api } from '../service/Api';
 import { Colors, PageHeader } from '../components/Common';
 import { FeedContent } from '../components/FeedContent';
 import { DetailPage } from './DetailPage';
 import { PublishPage } from './PublishPage';
 import { MyPage } from './MyPage';
 import { StatisticsPage } from './StatisticsPage';
-interface ReturnResult { changed?: boolean; published?: boolean; }
+import { ClaimFormPage } from './ClaimFormPage';
+import { ClaimCenterPage } from './ClaimCenterPage';
 @Entry
 @ComponentV2
 struct Index {
   @Local model: FeedModel = new FeedModel();
-  @Local notice: string = '';
+  @Local headline: string = '校园线索，正在连接';
   private stack: NavPathStack = new NavPathStack();
-  private noticeTimer: number = -1;
-  aboutToAppear(): void { this.model.load(); }
-  aboutToDisappear(): void { this.model.cancel(); if (this.noticeTimer >= 0) { clearTimeout(this.noticeTimer); } }
-  open(name: string, param: string = ''): void {
-    this.stack.pushPath({ name: name, param: param, onPop: (info: PopInfo) => {
-      const result = info.result as ReturnResult;
-      if (result?.changed) { this.model.load(); }
-      if (result?.published) {
-        this.notice = '发布成功，新的线索已经送达。';
-        if (this.noticeTimer >= 0) { clearTimeout(this.noticeTimer); }
-        this.noticeTimer = setTimeout(() => { this.notice = ''; this.noticeTimer = -1; }, 4500);
-      }
-    } });
+  private generation: number = 0;
+  aboutToDisappear(): void { this.model.cancel(); this.generation++; }
+  async refresh(): Promise<void> {
+    this.model.load(false);
+    const ticket = ++this.generation;
+    try { const stats = await Api.statistics(30); if (ticket === this.generation) { this.headline = '近30日 ' + stats.total + ' 条线索 · ' + stats.resolved + ' 份重逢'; } }
+    catch (error) { if (ticket === this.generation) { this.headline = '每一份善意，都值得被看见'; } }
   }
+  open(name: string, param: string = ''): void { this.stack.pushPath({ name: name, param: param }); }
   @Builder
   destination(name: string) {
     if (name === 'Detail') { DetailPage() }
     else if (name === 'Publish') { PublishPage() }
-    else if (name === 'My') { MyPage({ onOpen: (id: string) => this.open('Detail', id) }) }
+    else if (name === 'My') { MyPage() }
     else if (name === 'Statistics') { StatisticsPage() }
+    else if (name === 'ClaimForm') { ClaimFormPage() }
+    else if (name === 'ClaimCenter') { ClaimCenterPage() }
   }
   @Builder
   nav(label: string, symbol: string, route: string) {
     Column({ space: 3 }) {
-      Text(symbol).fontSize(21).fontWeight(FontWeight.Bold).fontColor(Colors.green)
-      Text(label).fontSize(11).fontColor(Colors.green)
-    }.layoutWeight(1).height(53).justifyContent(FlexAlign.Center).onClick(() => {
-      if (route.length) { this.open(route); } else { this.model.load(); }
-    })
+      Text(symbol).fontSize(21).fontWeight(FontWeight.Bold).fontColor(route.length ? '#7F948A' : Colors.green)
+      Text(label).fontSize(10).fontWeight(route.length ? FontWeight.Normal : FontWeight.Bold).fontColor(route.length ? '#7F948A' : Colors.green)
+    }.layoutWeight(1).height(52).justifyContent(FlexAlign.Center).onClick(() => { if (route.length) { this.open(route); } else { this.model.reset(); this.refresh(); } })
   }
   build() {
     Navigation(this.stack) {
-      Column({ space: 12 }) {
-        PageHeader({ title: '拾光校园', subtitle: 'LOST & FOUND  /  校园互助' })
+      Column({ space: 10 }) {
+        PageHeader({ title: '拾光校园', subtitle: 'CAMPUS FINDER  /  让善意有迹可循' })
         Row() {
-          Column({ space: 8 }) {
-            Text('让每一份遗失\n都有回音').fontSize(24).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').lineHeight(32)
-            Text('找回物品，也遇见校园里的善意').fontSize(11).fontColor('#D6E5D3')
+          Column({ space: 7 }) {
+            Text('遗失有回应\n善意有回响').fontSize(23).fontWeight(FontWeight.Bold).fontColor('#FFFCED').lineHeight(29)
+            Text(this.headline).fontSize(10).fontColor('#C6DDC7')
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Text('⌕').fontSize(70).fontColor('#F3D28F').margin({ right: 5 })
-        }.width('90%').height(132).padding(20).backgroundColor(Colors.green).borderRadius(23)
-        if (this.notice.length) { Text(this.notice).fontSize(12).fontColor(Colors.green).onClick(() => { this.notice = ''; }) }
+          Image($r('app.media.campus_hero')).width(116).height(108).objectFit(ImageFit.Contain)
+        }.width('90%').height(118).padding({ left: 18, right: 5 }).backgroundColor('#175D50').borderRadius(22)
         FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id) }).layoutWeight(1)
         Row() {
-          this.nav('广场', '⌂', '')
-          this.nav('统计', '▥', 'Statistics')
-          this.nav('发布', '＋', 'Publish')
+          this.nav('失物广场', '⌂', '')
+          this.nav('互助统计', '▥', 'Statistics')
+          this.nav('发布启事', '＋', 'Publish')
           this.nav('我的', '○', 'My')
-        }.width('100%').padding({ left: 10, right: 10, top: 5, bottom: 8 }).backgroundColor('#FFFFFF')
+        }.width('100%').padding({ left: 10, right: 10, top: 4, bottom: 8 }).backgroundColor('#FFFFFF').border({ width: { top: 1 }, color: '#E4EBE3' })
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).navDestination(this.destination).mode(NavigationMode.Stack)
-      .onNavBarStateChange((visible: boolean) => { if (visible) { this.model.load(); } })
+      .onNavBarStateChange((visible: boolean) => { if (visible) { this.refresh(); } })
   }
 }
