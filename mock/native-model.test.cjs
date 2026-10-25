@@ -38,7 +38,7 @@ test('原生响应校验器：真实服务契约与损坏结构', async t => {
       const http = { RequestMethod: { GET: 'GET', POST: 'POST' }, HttpDataType: { STRING: 'STRING' }, createHttp: () => ({ request: async () => ({ responseCode: 200, result: JSON.stringify(payload) }), destroy: () => { destroys++; } }) };
       const { Api } = loadEts('service/Api.ets', { '@kit.NetworkKit': { http } });
       const input = { title: '', location: '', description: '', contact: '', occurredAt: '', kind: 'lost', category: '证件卡片', requestId: 'shape' };
-      const calls = [() => Api.list('all', 'all', ''), () => Api.detail('id'), () => Api.publish(input), () => Api.action('id', 'resolve'), () => Api.favorite('id', true), () => Api.claim('id', { proof: '', contact: '' }), () => Api.claims('sent'), () => Api.review('id', 'cancel'), () => Api.matches('id'), () => Api.draft(), () => Api.saveDraft(input), () => Api.me(), () => Api.statistics()];
+      const calls = [() => Api.list('all', 'all', ''), () => Api.detail('id'), () => Api.publish(input), () => Api.action('id', 'resolve'), () => Api.favorite('id', true), () => Api.claim('id', { proof: '', contact: '' }), () => Api.claims('sent'), () => Api.review('id', 'cancel'), () => Api.matches('id'), () => Api.draft(), () => Api.saveDraft(input), () => Api.discardDraft('draft', new Date().toISOString()), () => Api.me(), () => Api.statistics()];
       for (const call of calls) await assert.rejects(call, /格式异常/);
       assert.equal(destroys, calls.length);
       payload = null; await assert.rejects(() => Api.list('all', 'all', ''), /数据异常/); assert.equal(destroys, calls.length + 1);
@@ -78,5 +78,24 @@ test('原生FeedModel：受控乱序、取消和分页恢复', async t => {
     model.keyword = 'old'; model.kind = 'lost'; model.status = 'resolved'; model.sort = 'oldest'; model.reset();
     pending[1].resolve({ items: [], total: 0, page: 1, pageSize: 2, hasMore: false }); await flush();
     assert.equal(model.keyword, ''); assert.equal(model.kind, 'all'); assert.equal(model.status, 'all'); assert.equal(model.sort, 'latest'); assert.equal(model.phase, 'empty');
+  });
+});
+
+
+test('原生管理API：状态参数与舍弃响应契约', async t => {
+  let last, destroys = 0, payload = { claims: [], pending: 0 };
+  const http = { RequestMethod: { GET: 'GET', POST: 'POST' }, HttpDataType: { STRING: 'STRING' }, createHttp: () => ({ request: async (url, options) => { last = { url, options }; return { responseCode: 200, result: JSON.stringify({ code: 0, message: 'ok', data: payload }) }; }, destroy: () => { destroys++; } }) };
+  const { Api } = loadEts('service/Api.ets', { '@kit.NetworkKit': { http } });
+  await t.test('实际Api传递申请状态与方向，默认调用仍为全部', async () => {
+    await Api.claims('sent', 'rejected'); assert.match(last.url, /direction=sent&status=rejected/); assert.equal(last.options.method, 'GET');
+    await Api.claims('received'); assert.match(last.url, /status=all/); assert.equal(destroys, 2);
+  });
+  await t.test('实际Api携带草稿版本，拒绝仍存在草稿的成功假响应', async () => {
+    payload = { exists: false, input: null, updatedAt: '' };
+    await Api.discardDraft('draft-token', '2026-01-01T00:00:00.000Z');
+    assert.match(last.url, /\/api\/draft\/discard$/); assert.equal(last.options.method, 'POST');
+    assert.deepEqual(JSON.parse(last.options.extraData), { requestId: 'draft-token', updatedAt: '2026-01-01T00:00:00.000Z' });
+    payload = { exists: true, input: { title: '', location: '', description: '', contact: '', occurredAt: '', kind: 'lost', category: '证件卡片', requestId: 'new' }, updatedAt: '2026-01-01T00:00:00.000Z' };
+    await assert.rejects(() => Api.discardDraft('draft-token', '2026-01-01T00:00:00.000Z'), /格式异常/); assert.equal(destroys, 4);
   });
 });

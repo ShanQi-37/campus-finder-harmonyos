@@ -42,8 +42,8 @@ export class Api {
   static action(id: string, action: string): Promise<Item> { return Api.itemResponse(Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/' + action, '{}')); }
   static favorite(id: string, saved: boolean): Promise<Item> { return Api.itemResponse(Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/favorite', JSON.stringify({ saved: saved }))); }
   static claim(id: string, input: ClaimInput): Promise<Claim> { return Api.claimResponse(Api.request<Claim>('/api/items/' + encodeURIComponent(id) + '/claims', JSON.stringify(input))); }
-  static async claims(direction: string): Promise<ClaimList> {
-    const data = await Api.request<ClaimList>('/api/claims?direction=' + direction);
+  static async claims(direction: string, status: string = 'all'): Promise<ClaimList> {
+    const data = await Api.request<ClaimList>('/api/claims?direction=' + encodeURIComponent(direction) + '&status=' + encodeURIComponent(status));
     if (!ResponseGuard.claims(data)) { throw new Error('返回申请格式异常'); }
     return data;
   }
@@ -59,6 +59,11 @@ export class Api {
     return data;
   }
   static async saveDraft(input: PublishInput): Promise<DraftState> { const data = await Api.request<DraftState>('/api/draft', JSON.stringify(input)); if (!ResponseGuard.draft(data)) { throw new Error('返回草稿格式异常，请刷新后核对保存结果'); } return data; }
+  static async discardDraft(requestId: string, updatedAt: string): Promise<DraftState> {
+    const data = await Api.request<DraftState>('/api/draft/discard', JSON.stringify({ requestId: requestId, updatedAt: updatedAt }));
+    if (!ResponseGuard.draft(data) || data.exists) { throw new Error('返回草稿格式异常，请重新加载后核对结果'); }
+    return data;
+  }
   static async me(): Promise<PersonalSummary> {
     const data = await Api.request<PersonalSummary>('/api/me');
     if (!ResponseGuard.summary(data)) { throw new Error('返回任务格式异常'); }

@@ -9,12 +9,15 @@ export struct ClaimCenterPage {
   @Local error: string = '';
   @Local busy: boolean = false;
   @Local notice: string = '';
+  @Local claimStatus: string = 'pending';
+  private statuses: string[] = ['all', 'pending', 'accepted', 'rejected', 'cancelled'];
+  private statusOptions: SelectOption[] = [{ value: '全部申请' }, { value: '待核对' }, { value: '已通过' }, { value: '未通过' }, { value: '已取消' }];
   private stack: NavPathStack = new NavPathStack();
   private generation: number = 0;
   private active: boolean = true;
   async load(): Promise<void> {
     const ticket = ++this.generation; this.phase = 'loading'; this.error = '';
-    try { const result = await Api.claims(this.boxDirection); if (this.active && ticket === this.generation) { this.claims = result.claims; this.phase = result.claims.length ? 'ready' : 'empty'; } }
+    try { const result = await Api.claims(this.boxDirection, this.claimStatus); if (this.active && ticket === this.generation) { this.claims = result.claims; this.phase = result.claims.length ? 'ready' : 'empty'; } }
     catch (error) { if (this.active && ticket === this.generation) { this.error = (error as Error).message; this.phase = 'error'; } }
   }
   async review(id: string, action: string): Promise<void> {
@@ -39,9 +42,15 @@ export struct ClaimCenterPage {
           Blank()
           Text('刷新').fontSize(11).fontColor(Colors.green).padding(7).onClick(() => { this.load(); })
         }.width('100%').padding({ left: 18, right: 18 }).enabled(!this.busy)
+        Row({ space: 12 }) {
+          Select(this.statusOptions).selected(this.statuses.indexOf(this.claimStatus)).value(this.statusOptions[this.statuses.indexOf(this.claimStatus)].value as string)
+            .font({ size: 12 }).height(32).backgroundColor(Colors.soft).width(126)
+            .onSelect((index: number) => { this.claimStatus = this.statuses[index]; this.notice = ''; this.load(); })
+          Text(this.phase === 'loading' ? '正在同步…' : (this.phase === 'error' ? '同步失败，可重试' : ('当前筛选 ' + this.claims.length + ' 条'))).fontSize(11).fontColor(Colors.muted)
+        }.width('100%').padding({ left: 18, right: 18 }).enabled(!this.busy)
         if (this.notice.length) { Text(this.notice).fontSize(11).fontColor(Colors.green).width('90%').padding(12).backgroundColor(Colors.soft).borderRadius(12) }
         if (this.phase !== 'ready') {
-          StatePanel({ phase: this.phase, error: this.error, emptyText: '还没有相关申请', onRetry: () => { this.load(); } }).layoutWeight(1)
+          StatePanel({ phase: this.phase, error: this.error, emptyText: this.claimStatus === 'pending' ? '暂无待核对申请' : '当前状态还没有申请', emptyAction: this.claimStatus === 'all' ? '刷新信息' : '查看全部申请', onRetry: () => { if (this.phase === 'empty') { this.claimStatus = 'all'; } this.load(); } }).layoutWeight(1)
         } else {
           if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('90%') }
           List({ space: 12 }) {

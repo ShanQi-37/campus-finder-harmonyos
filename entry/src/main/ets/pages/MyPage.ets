@@ -67,6 +67,14 @@ export struct MyPage {
           Blank()
           Text('刷新').fontSize(12).fontColor(Colors.green).padding(6).onClick(() => { this.reload(); })
         }.width('100%').padding({ left: 18, right: 18 })
+        if (this.tab === 'posted') {
+          Row({ space: 6 }) {
+            ChoiceChip({ label: '全部', selected: this.model.status === 'all', onSelect: () => { this.model.status = 'all'; this.model.load(); } })
+            ChoiceChip({ label: '待寻回', selected: this.model.status === 'open', onSelect: () => { this.model.status = 'open'; this.model.load(); } })
+            ChoiceChip({ label: '已寻回', selected: this.model.status === 'resolved', onSelect: () => { this.model.status = 'resolved'; this.model.load(); } })
+            ChoiceChip({ label: '已撤回', selected: this.model.status === 'withdrawn', onSelect: () => { this.model.status = 'withdrawn'; this.model.load(); } })
+          }.width('100%').padding({ left: 18, right: 18 })
+        }
         FeedContent({ model: this.model, filters: false, onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } }).layoutWeight(1)
         BottomNav({ active: 'My', onNavigate: (route: string) => this.navigate(route) })
       }.width('100%').height('100%').backgroundColor(Colors.paper)

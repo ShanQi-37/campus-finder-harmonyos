@@ -16,11 +16,13 @@ export struct PublishPage {
   @Local step: number = 1;
   @Local phase: string = 'loading';
   @Local editing: boolean = false;
+  @Local hasSavedDraft: boolean = false;
   private itemId: string = '';
   private requestId: string = 'draft-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   private stack: NavPathStack = new NavPathStack();
   private active: boolean = true;
   private baseline: string = '';
+  private savedDraftAt: string = '';
   input(): PublishInput { return { title: this.title, category: this.category, kind: this.kind, location: this.location, description: this.description, contact: this.contact, occurredAt: this.occurredAt, requestId: this.requestId }; }
   async load(): Promise<void> {
     this.phase = 'loading'; this.error = '';
@@ -35,6 +37,7 @@ export struct PublishPage {
         if (draft.exists && input !== null) {
           this.kind = input.kind; this.category = input.category; this.title = input.title; this.location = input.location;
           this.description = input.description; this.contact = input.contact; this.occurredAt = input.occurredAt; this.requestId = input.requestId;
+          this.hasSavedDraft = true; this.savedDraftAt = draft.updatedAt;
           this.notice = '已恢复草稿 · 可继续编辑后发布';
         }
       }
@@ -57,9 +60,27 @@ export struct PublishPage {
   }
   async saveDraft(leave: boolean = false): Promise<void> {
     if (this.busy || this.editing) { return; } this.busy = true; this.error = ''; this.notice = '';
-    try { await Api.saveDraft(this.input()); if (this.active) { this.baseline = JSON.stringify(this.input()); this.notice = '草稿已保存 · 可在我的校园中继续填写'; if (leave) { this.stack.pop({ changed: true }); } } }
+    try { const draft = await Api.saveDraft(this.input()); if (this.active) { this.hasSavedDraft = true; this.savedDraftAt = draft.updatedAt; this.baseline = JSON.stringify(this.input()); this.notice = '草稿已保存 · 可在我的校园中继续填写'; if (leave) { this.stack.pop({ changed: true }); } } }
     catch (error) { if (this.active) { this.error = (error as Error).message; } }
     finally { if (this.active) { this.busy = false; } }
+  }
+  confirmDiscard(): void {
+    if (this.busy || !this.hasSavedDraft) { return; }
+    this.getUIContext().showAlertDialog({ title: '舍弃这份草稿？', message: '将清除已保存草稿和本页尚未保存的改动，重新填写空白启事。已发布的启事不会受影响。',
+      primaryButton: { value: '继续填写', action: () => {} }, secondaryButton: { value: '确认舍弃', action: () => { this.discardDraft(); } } });
+  }
+  async discardDraft(): Promise<void> {
+    if (this.busy || !this.hasSavedDraft) { return; } this.busy = true; this.error = ''; this.notice = '';
+    try {
+      await Api.discardDraft(this.requestId, this.savedDraftAt);
+      if (this.active) {
+        this.kind = 'lost'; this.category = '证件卡片'; this.title = ''; this.location = ''; this.description = ''; this.contact = '校园服务台转接（演示）';
+        this.occurredAt = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+        this.requestId = 'draft-' + Date.now() + '-' + Math.random().toString(36).slice(2); this.savedDraftAt = ''; this.hasSavedDraft = false; this.step = 1;
+        this.baseline = JSON.stringify(this.input()); this.notice = '旧草稿已清除 · 可以重新填写';
+      }
+    } catch (error) { if (this.active) { this.error = (error as Error).message; } }
+    finally { this.busy = false; }
   }
   validate(): boolean {
     if (this.title.trim().length < 2 || this.location.trim().length < 2 || this.description.trim().length < 8 || this.contact.trim().length < 2) { this.error = '请填全信息，物品描述至少 8 个字。'; return false; }
@@ -98,6 +119,7 @@ export struct PublishPage {
           if (!this.editing) {
             Row() {
               Text(this.notice.length ? this.notice : '暂时没写完？先保存草稿').fontSize(10).fontColor(Colors.green).maxLines(2).layoutWeight(1)
+              if (this.hasSavedDraft) { Text('舍弃').fontSize(11).fontColor(Colors.red).padding(8).onClick(() => this.confirmDiscard()) }
               Button('存草稿').fontSize(11).height(29).fontColor(Colors.green).backgroundColor(Colors.soft).onClick(() => { this.saveDraft(); })
             }.width('100%').padding({ left: 18, right: 18 }).enabled(!this.busy)
           }
