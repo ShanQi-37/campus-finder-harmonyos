@@ -1,13 +1,14 @@
 # 拾光校园 · Campus Finder
 
-原生 HarmonyOS 校园失物招领与寻回数据可视化课程项目。第三版覆盖完整的本机演示业务：发布与编辑启事、组合搜索、收藏、认领或提供线索、双方核对交接、撤回恢复、个人记录和动态统计。
+原生 HarmonyOS 校园失物招领与寻回数据可视化课程项目。第四版覆盖完整的本机演示业务：发布与编辑启事、组合搜索、收藏、认领或提供线索、双方核对交接、撤回恢复、个人记录和动态统计。
 
 ![第三版原生广场](screenshots/v3/22-final-home.png)
 
-![提交前预览](screenshots/v3/08-publish-review.png)
+![第四版本人状态管理](screenshots/v4/01-my-resolved.png)
 
 ## 功能
 
+- 管理升级：本人启事可按待寻回、已寻回、已撤回筛选；申请中心默认聚焦待核对，可查看全部、已通过、未通过、已取消。草稿支持二次确认舍弃，并校验身份与保存版本，旧页面不会误删新内容。
 - 草稿续写：按体验身份保存未填完整的内容，返回时提醒保存，重新进入恢复；三步预览后提交，成功后原子清理对应草稿，失败可重试。
 - 相似线索：从开放启事查找同类、相反类型、不同发布者的候选，按地点和日期排序并说明理由；仍需人工核对，联系信息保持原有保护。
 - 个人任务：待我核对、我的申请、发布草稿和收藏数量均来自HTTP；广场、统计、我的复用矢量底部导航，主入口切换替换栈顶。
@@ -29,9 +30,9 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
 # 另一窗口编译
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-# 真实HTTP回归：37项（33个子测试及4个父测试）
-& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs
-# 直接加载实际 ArkTS 的接口校验与状态模型：12项
+# 真实HTTP回归：45项（40个子测试及5个父测试）
+& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs .\mock\management.test.cjs
+# 直接加载实际 ArkTS 的接口校验与状态模型：15项
 & 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\native-model.test.cjs
 ```
 
@@ -49,7 +50,7 @@ Previewer连接 `http://127.0.0.1:4524`。其他设备需另行配置端口映�
 
 ## 文档与评分
 
-[系统检查与纠错](docs/AUDIT.md) · [接口与状态机](docs/API.md) · [演示步骤](docs/DEMO.md) · [验证边界](docs/VALIDATION.md) · [要求核对](docs/ASSESSMENT.md)
+[第四版管理升级](docs/UPGRADE_V4.md) · [系统检查与纠错](docs/AUDIT.md) · [接口与状态机](docs/API.md) · [演示步骤](docs/DEMO.md) · [验证边界](docs/VALIDATION.md) · [要求核对](docs/ASSESSMENT.md)
 
 | 项目 | 对应实现 |
 | --- | --- |

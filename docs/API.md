@@ -59,3 +59,9 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 发布重试按身份和requestId查找原记录，并以初次规范化字段的SHA256核对内容；同标识不同内容返回409，用户应在我的记录中编辑已发布启事。匹配的重试返回原记录并原子清理同一草稿，不删除另一requestId的新草稿。保存初次指纹使发布后编辑不破坏原始请求重试；升级前旧记录没有初次指纹，只能按当前内容核对。省略日期的重试沿用原发生日期。requestId与内部指纹不返回客户端。
 
 统计用同一个上海日期锚点生成窗口及每日标签，同时排除窗口之前和今日之后的创建日期，防止午夜和未来记录造成总量与趋势不一致。ResponseGuard对所有读写响应中UI使用的字段、分页、待办及统计关系进行校验；合法JSON的错误结构同样进入可读错误与重试流程。shape模式仅用于本机故障验证，结束恢复normal。
+
+## 第四版管理接口
+
+`POST /api/draft/discard` 接收已读取或保存草稿的`{requestId,updatedAt}`。服务端仅操作当前身份；版本一致才原子舍弃，返回`{exists:false,input:null,updatedAt:''}`。不存在时幂等成功，不影响已发布启事；版本冲突409，参数无效400，磁盘失败500并回滚。每次草稿保存的updatedAt严格递增，即使同一毫秒连续保存也能区分版本。
+
+`GET /api/claims` 新增status=all/pending/accepted/rejected/cancelled，默认all，继续结合direction=received/sent和当前身份过滤；pending是当前结果内待核对数。客户端任务入口默认pending，空状态可切回全部申请。个人启事复用列表的status筛选；withdrawn仅本人owner列表可见，恢复后退出撤回结果。
