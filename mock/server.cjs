@@ -128,10 +128,18 @@ function createApp(options = {}) {
           }
           if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind) || typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80) return reply(res, 400, null, '草稿类型或标识无效');
           const input = { title: body.title.trim(), location: body.location.trim(), description: body.description.trim(), contact: body.contact.trim(), occurredAt: body.occurredAt.trim(), kind: body.kind, category: body.category, requestId: body.requestId };
-          const draft = { actor, input, updatedAt: now() };
+          const previous = Date.parse(store.drafts.find(d => d.actor === actor)?.updatedAt || '');
+          const draft = { actor, input, updatedAt: new Date(Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0)).toISOString() };
           commit({ ...store, drafts: [...store.drafts.filter(d => d.actor !== actor), draft] });
           return reply(res, 200, { exists: true, input, updatedAt: draft.updatedAt });
         }
+      }
+      if (url.pathname === '/api/draft/discard' && req.method === 'POST') {
+        if (typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80 || typeof body.updatedAt !== 'string' || !Number.isFinite(Date.parse(body.updatedAt))) return reply(res, 400, null, '草稿版本参数无效，请重新加载');
+        const draft = store.drafts.find(d => d.actor === actor);
+        if (draft && (draft.input.requestId !== body.requestId || draft.updatedAt !== body.updatedAt)) return reply(res, 409, null, '草稿已有新版本，请返回后重新打开，避免误删新内容');
+        if (draft) commit({ ...store, drafts: store.drafts.filter(d => d.actor !== actor) });
+        return reply(res, 200, { exists: false, input: null, updatedAt: '' });
       }
       if (url.pathname === '/api/statistics' && req.method === 'GET') {
         const days = Number(url.searchParams.get('days') || 7), category = url.searchParams.get('category') || 'all';
@@ -141,7 +149,9 @@ function createApp(options = {}) {
       if (url.pathname === '/api/claims' && req.method === 'GET') {
         const direction = url.searchParams.get('direction') || 'received';
         if (!['received', 'sent'].includes(direction)) return reply(res, 400, null, '申请方向无效');
-        const rows = (fault === 'empty' ? [] : store.claims).filter(c => (direction === 'sent' ? c.sender : c.owner) === actor);
+        const status = url.searchParams.get('status') || 'all';
+        if (!['all', 'pending', 'accepted', 'rejected', 'cancelled'].includes(status)) return reply(res, 400, null, '申请状态无效');
+        const rows = (fault === 'empty' ? [] : store.claims).filter(c => (direction === 'sent' ? c.sender : c.owner) === actor && (status === 'all' || c.status === status));
         return reply(res, 200, { claims: [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(claimView), pending: rows.filter(c => c.status === 'pending').length });
       }
       if (url.pathname === '/api/items' && req.method === 'GET') {
