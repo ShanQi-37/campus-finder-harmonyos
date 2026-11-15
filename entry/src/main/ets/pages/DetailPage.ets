@@ -1,7 +1,7 @@
 import { Item, MatchLead, TimelineEvent, emptyItem } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
-import { categoryArt, Colors, ItemCard, PageHeader, StatePanel, statusText, ChoiceChip } from '../components/Common';
+import { categoryArt, Colors, ItemCard, NoticeStatus, PageHeader, SegmentTab, StatePanel } from '../components/Common';
 @ComponentV2
 export struct DetailPage {
   @Local item: Item = emptyItem();
@@ -44,34 +44,44 @@ export struct DetailPage {
   build() {
     NavDestination() {
       Column({ space: 10 }) {
-        PageHeader({ title: '线索详情', subtitle: '认真核对，让物品安心回家', back: true, onBack: () => this.back() })
+        PageHeader({ title: '线索详情', back: true, onBack: () => this.back() })
         if (this.phase !== 'ready') {
           StatePanel({ phase: this.phase, error: this.error, onRetry: () => { this.load(); } }).layoutWeight(1)
         } else {
-          Row({ space: 16 }) {
-            Image(categoryArt(this.item.category)).width(104).height(116).objectFit(ImageFit.Contain).backgroundColor('#E8EFE1').borderRadius(20)
-            Column({ space: 10 }) {
-              Text(this.item.kind === 'found' ? 'FOUND / 拾物招领' : 'LOST / 寻物启事').fontSize(10).fontColor(Colors.green)
-              Text(this.item.title).fontSize(20).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(2)
-              Text(statusText(this.item.status)).fontSize(11).fontColor(Colors.green).backgroundColor(Colors.soft).padding(6).borderRadius(6)
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          }.width('100%').padding({ left: 18, right: 18 })
-          Row({ space: 8 }) {
-            ChoiceChip({ label: '物品信息', selected: this.section === 'info', onSelect: () => { this.section = 'info'; } })
-            ChoiceChip({ label: '动态记录', selected: this.section === 'history', onSelect: () => { this.section = 'history'; } })
-            ChoiceChip({ label: '相似线索', selected: this.section === 'matches', onSelect: () => { this.loadMatches(); } })
-          }.width('100%').padding({ left: 18, right: 18 })
+          Column({ space: 8 }) {
+            Row({ space: 12 }) {
+              Image(categoryArt(this.item.category)).width(78).height(84).objectFit(ImageFit.Contain)
+                .backgroundColor(this.item.kind === 'found' ? '#EAF2E6' : '#FBF0D9').borderRadius(14).accessibilityLevel('no')
+              Column({ space: 6 }) {
+                Text((this.item.kind === 'found' ? '招领' : '寻物') + ' · ' + this.item.category)
+                  .fontSize(12).fontColor(Colors.muted).maxLines(1)
+                Text(this.item.title).fontSize(20).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(3)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                NoticeStatus({ status: this.item.status })
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+            }.width('100%').padding(12).backgroundColor(Colors.surface).borderRadius(16)
+              .border({ width: 1, color: Colors.stroke })
+            Row({ space: 4 }) {
+              SegmentTab({ label: '物品信息', selected: this.section === 'info',
+                onSelect: () => { this.section = 'info'; } }).layoutWeight(1)
+              SegmentTab({ label: '动态记录', selected: this.section === 'history',
+                onSelect: () => { this.section = 'history'; } }).layoutWeight(1)
+              SegmentTab({ label: '相似线索', selected: this.section === 'matches',
+                onSelect: () => { this.loadMatches(); } }).layoutWeight(1)
+            }.width('100%').padding(3).borderRadius(13).backgroundColor(Colors.soft)
+          }.width('100%').padding({ left: 16, right: 16 })
           Scroll() {
             Column({ space: 14 }) {
               if (this.section === 'info') {
                 Column({ space: 13 }) {
-                  Text('⌖  ' + this.item.location).fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green).width('100%')
-                  Text(this.item.occurredAt + '  ·  ' + this.item.ownerName).fontSize(11).fontColor(Colors.muted).width('100%')
+                  Text('地点  ' + this.item.location).fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+                  Text(this.item.occurredAt + '  ·  ' + this.item.ownerName).fontSize(12).fontColor(Colors.muted).width('100%')
                   Divider().color('#E9EEE6')
                   Text(this.item.description).fontSize(14).lineHeight(23).fontColor('#526F63').width('100%')
-                }.padding(17).width('100%').backgroundColor('#FFFFFF').borderRadius(18)
+                }.padding(16).width('100%').backgroundColor(Colors.surface).borderRadius(16)
+                  .border({ width: 1, color: Colors.stroke })
                 Column({ space: 7 }) {
-                  Text(this.item.contactVisible ? '联系与交接' : '核对后，安心交接').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+                  Text(this.item.contactVisible ? '联系与交接' : '联系指引').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
                   Text(this.item.contact).fontSize(12).fontColor(Colors.muted).lineHeight(20).width('100%')
                   Text('请勿提供密码、付款或公开完整证件号码。').fontSize(10).fontColor('#A88449').width('100%')
                 }.padding(16).backgroundColor('#FFF6E6').borderRadius(16).width('100%')
@@ -99,7 +109,7 @@ export struct DetailPage {
                 }, (entry: TimelineEvent) => entry.at + entry.label)
                 Text('仅记录真实操作；当前内容均为虚构演示数据。').fontSize(11).fontColor(Colors.muted).width('100%')
               }
-            }.width('100%').padding({ left: 18, right: 18, bottom: 10 })
+            }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
           }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top).enabled(!this.busy)
           Column({ space: 8 }) {
             if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('100%') }
@@ -120,7 +130,8 @@ export struct DetailPage {
                   .onClick(() => { this.stack.pushPath({ name: this.item.status === 'open' && !this.item.myPending ? 'ClaimForm' : 'ClaimCenter', param: this.item.status === 'open' && !this.item.myPending ? this.itemId : 'sent' }); })
               }.width('100%')
             }
-          }.enabled(!this.busy).width('100%').padding({ left: 18, right: 18, top: 8, bottom: 20 }).backgroundColor('#FFFFFF')
+          }.enabled(!this.busy).width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 })
+            .backgroundColor(Colors.surface).border({ width: { top: 1 }, color: Colors.stroke })
         }
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; this.itemId = context.pathInfo.param as string; })

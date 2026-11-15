@@ -17,8 +17,11 @@ export struct CategoryChart {
           }.width('100%').height(12)
         }.width('100%').onClick(() => { this.selected = point.label; }).accessibilityText(point.label + ' ' + point.count + '条')
       }, (point: CountPoint) => point.label)
-      Text(this.selected.length ? '已选中：' + this.selected : '点击类别可高亮查看').fontSize(11).fontColor(Colors.muted).width('100%')
-    }.width('100%').padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+      if (this.selected.length) {
+        Text('已选中 ' + this.selected).fontSize(12).fontColor(Colors.ink).width('100%')
+      }
+    }.width('100%').padding(16).backgroundColor(Colors.surface).borderRadius(16)
+      .border({ width: 1, color: Colors.stroke })
   }
 }
 @ComponentV2
@@ -85,42 +88,45 @@ export struct TrendChart {
         }, (p: TrendPoint, index: number) => p.label + ':' + index)
       }.width('100%').height(16)
       if (this.points.length > 0) {
-        Column({ space: 4 }) {
-          Text(this.points[this.dayIndex()].label + ' 发布 · 有效 ' + this.points[this.dayIndex()].count +
-            ' 条 · 其中已寻回 ' + this.points[this.dayIndex()].resolved + ' 条')
-            .fontSize(12).fontWeight(FontWeight.Medium).fontColor(Colors.ink).width('100%')
+        Column({ space: 5 }) {
+          Text(this.points[this.dayIndex()].label + ' 发布').fontSize(14).fontWeight(FontWeight.Bold)
+            .fontColor(Colors.ink).width('100%')
+          Text('有效启事 ' + this.points[this.dayIndex()].count + ' 条 · 其中已寻回 ' +
+            this.points[this.dayIndex()].resolved + ' 条').fontSize(12).fontColor(Colors.ink).width('100%')
           if (this.points.length > 1) {
             Slider({ value: this.dayIndex() + 1, min: 1, max: this.points.length, step: 1 })
-              .selectedColor('#447C60').width('100%').height(32).accessibilityText('选择发布日期')
+              .selectedColor('#447C60').width('100%').height(44)
+              .accessibilityText('选择发布日期').accessibilityDescription(this.points[this.dayIndex()].label)
               .onChange((value: number) => { this.selectedDay = Math.round(value); })
           }
         }.width('100%').backgroundColor('#F1F5EF').borderRadius(12).padding({ left: 12, right: 12, top: 8, bottom: 3 })
       }
       Text('横轴为发布日期。已寻回按启事当前状态统计。').fontSize(11).fontColor(Colors.muted).width('100%')
-    }.width('100%').padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+    }.width('100%').padding(16).backgroundColor(Colors.surface).borderRadius(16)
+      .border({ width: 1, color: Colors.stroke })
   }
 }
 @ComponentV2
 export struct RecoveryChart {
   @Param data: Statistics = emptyStatistics();
   build() {
-    Column({ space: 18 }) {
-      Text('寻回进度').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
-      Row({ space: 22 }) {
+    Column({ space: 12 }) {
+      Text('寻回率').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+      Row({ space: 15 }) {
         Stack() {
           DataPanel({ values: [this.data.resolved], max: Math.max(1, this.data.total), type: DataPanelType.Circle })
-            .width(140).height(140).valueColors(['#447C60']).trackBackgroundColor('#EAF0E6').strokeWidth(12).closeEffect(true)
-          Column({ space: 5 }) {
+            .width(112).height(112).valueColors(['#447C60']).trackBackgroundColor('#EAF0E6').strokeWidth(10).closeEffect(true)
+          Column({ space: 3 }) {
             Text(this.data.recoveryRate + '%').fontSize(28).fontWeight(FontWeight.Bold).fontColor(Colors.green)
-            Text('总体寻回率').fontSize(11).fontColor(Colors.muted)
           }
         }
-        Column({ space: 16 }) {
+        Column({ space: 8 }) {
           Text('已寻回  ' + this.data.resolved + ' 条').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green)
           Text('待寻回  ' + this.data.open + ' 条').fontSize(13).fontColor(Colors.muted)
-          Text('寻回率 = 已寻回 / 有效启事').fontSize(10).fontColor(Colors.muted)
+          Text('已寻回 ÷ 有效启事').fontSize(11).fontColor(Colors.muted)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%')
-    }.width('100%').padding(20).backgroundColor('#FFFFFF').borderRadius(20)
+    }.width('100%').padding(16).backgroundColor(Colors.surface).borderRadius(16)
+      .border({ width: 1, color: Colors.stroke })
   }
 }

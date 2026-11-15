@@ -20,7 +20,7 @@
 | POST | /api/claims/:id/accept或reject或cancel | 发布者接受/拒绝，申请者取消 |
 | GET | /api/statistics?days=7或14或30&category=all或类别&anchor=today或latest | 动态聚合 |
 
-列表参数kind=all/lost/found，category=all或四类别，keyword匹配标题、地点或描述（最多80字），owner可为空、all或三种合法体验身份，status=all/open/resolved/withdrawn，sort=latest/oldest，saved=true/false，page正整数，pageSize=1..100。客户端每页2条，接口默认100。返回items,total,page,pageSize,hasMore。撤回启事仅本人管理列表可见，他人访问详情404。
+列表参数kind=all/lost/found，category=all或四类别，keyword匹配标题、地点或描述（最多80字），owner可为空、all或三种合法体验身份，status=all/open/resolved/withdrawn，sort=latest/oldest，saved=true/false，page正整数，pageSize=1..100。客户端每页 6 条，接口默认 100。返回items,total,page,pageSize,hasMore。撤回启事仅本人管理列表可见，他人访问详情404。
 
 搜索词按空白分隔，每个词至少出现在一个可搜索字段，词序不影响结果。关键词与字段均统一全角、半角和字母大小写。创建时间相同的启事按 ID 排序，分页顺序固定。
 

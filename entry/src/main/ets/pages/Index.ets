@@ -13,7 +13,7 @@ import { ClaimCenterPage } from './ClaimCenterPage';
 @ComponentV2
 struct Index {
   @Local model: FeedModel = new FeedModel();
-  @Local headline: string = '校园线索，正在连接';
+  @Local headline: string = '正在同步统计…';
   private stack: NavPathStack = new NavPathStack();
   private generation: number = 0;
   aboutToDisappear(): void { this.model.cancel(); this.generation++; }
@@ -23,8 +23,8 @@ struct Index {
   }
   async refreshHeadline(): Promise<void> {
     const ticket = ++this.generation;
-    try { const stats = await Api.statistics(30); if (ticket === this.generation) { this.headline = '近30日 ' + stats.total + ' 条线索 · ' + stats.resolved + ' 份重逢'; } }
-    catch (error) { if (ticket === this.generation) { this.headline = '每一份善意，都值得被看见'; } }
+    try { const stats = await Api.statistics(30); if (ticket === this.generation) { this.headline = '近 30 日 ' + stats.total + ' 条启事 · ' + stats.resolved + ' 条已寻回'; } }
+    catch (error) { if (ticket === this.generation) { this.headline = '近期统计暂不可用'; } }
   }
   open(name: string, param: string = ''): void { this.stack.pushPath({ name: name, param: param }); }
   @Builder
@@ -38,16 +38,17 @@ struct Index {
   }
   build() {
     Navigation(this.stack) {
-      Column({ space: 9 }) {
-        PageHeader({ title: '拾光校园', subtitle: 'CAMPUS FINDER  /  每一条线索都值得被看见' })
-        Row() {
-          Column({ space: 7 }) {
-            Text('让遗失，遇见归途').fontSize(21).fontWeight(FontWeight.Bold).fontColor('#FFFCED').lineHeight(28)
-            Text('寻物 · 招领 · 核对交接').fontSize(11).fontColor('#E5D7AF')
-            Text(this.headline).fontSize(11).fontColor('#C6DDC7')
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-          Image($r('app.media.campus_hero')).width(95).height(94).objectFit(ImageFit.Contain)
-        }.width('90%').height(102).padding({ left: 18, right: 5 }).backgroundColor('#175D50').borderRadius(20)
+      Column({ space: 8 }) {
+        PageHeader({ title: '拾光校园', subtitle: '校园失物招领' })
+        Column() {
+          Row() {
+            Column({ space: 5 }) {
+              Text('失物广场').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+              Text(this.headline).fontSize(12).fontColor('#D9EDE2').maxLines(2)
+            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+            Image($r('app.media.campus_hero')).width(86).height(70).objectFit(ImageFit.Contain).accessibilityLevel('no')
+          }.width('100%').height(80).padding({ left: 15, right: 8 }).backgroundColor('#134E45').borderRadius(16)
+        }.width('100%').padding({ left: 16, right: 16 })
         FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id), onRefresh: () => { this.refreshHeadline(); } }).layoutWeight(1)
         BottomNav({ active: 'Home', onNavigate: (route: string) => { if (route === 'Home') { this.refresh(); } else { this.open(route); } } })
       }.width('100%').height('100%').backgroundColor(Colors.paper)
