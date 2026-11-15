@@ -69,9 +69,9 @@ export class Api {
     if (!ResponseGuard.summary(data)) { throw new Error('返回任务格式异常'); }
     return data;
   }
-  static async statistics(days: number = 7, category: string = 'all'): Promise<Statistics> {
-    const data = await Api.request<Statistics>('/api/statistics?days=' + days + '&category=' + encodeURIComponent(category));
-    if (!ResponseGuard.statistics(data)) { throw new Error('返回统计格式异常'); }
+  static async statistics(days: number = 7, category: string = 'all', anchor: string = 'today'): Promise<Statistics> {
+    const data = await Api.request<Statistics>('/api/statistics?days=' + days + '&category=' + encodeURIComponent(category) + '&anchor=' + encodeURIComponent(anchor));
+    if (!ResponseGuard.statistics(data) || data.days !== days || data.category !== category || data.anchor !== anchor) { throw new Error('返回统计格式异常'); }
     return data;
   }
 }

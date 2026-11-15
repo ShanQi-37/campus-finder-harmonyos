@@ -21,6 +21,19 @@ test('HTTP业务闭环、校验、容错和持久化', async t => {
       assert.equal((await get('/api/items?category=' + encodeURIComponent('电子数码'))).data.total, 3);
       assert.equal((await get('/api/items?owner=demo-user')).data.total, 3);
     });
+    await t.test('多词跨字段匹配，支持全角与组合筛选', async () => {
+      const search = async keyword => (await get('/api/items?keyword=' + encodeURIComponent(keyword))).data;
+      for (const phrase of ['校园卡 图书馆', '图书馆　校园卡', '校园卡 白色贴纸']) {
+        const data = await search(phrase);
+        assert.deepEqual(data.items.map(item => item.id), phrase.includes('贴纸') ? [] : ['seed-1']);
+      }
+      assert.deepEqual((await search('图书馆　ｕ盘')).items.map(item => item.id), ['seed-9']);
+      assert.deepEqual((await search('保温杯 贴纸 第十教学楼')).items.map(item => item.id), ['seed-2']);
+      assert.equal((await search('转接（演示）')).total, 0);
+      const keyword = encodeURIComponent('图书馆 校园卡');
+      assert.equal((await get('/api/items?kind=lost&keyword=' + keyword)).data.total, 0);
+      assert.equal((await get('/api/items?kind=found&keyword=' + keyword)).data.total, 1);
+    });
     await t.test('拒绝不合法发布、畸形JSON、越权寻回与不存在详情', async () => {
       assert.equal((await post('/api/items', {})).status, 400);
       assert.equal((await post('/api/items/seed-1/resolve', {})).status, 403);

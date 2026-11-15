@@ -1,4 +1,4 @@
-import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchList, PersonalSummary, PublishInput, Statistics } from '../model/Models';
+import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchList, PersonalSummary, PublishInput, Statistics, TrendPoint } from '../model/Models';
 
 // Check every field used by the UI before accepting an untrusted HTTP payload.
 export class ResponseGuard {
@@ -56,12 +56,18 @@ export class ResponseGuard {
   static statistics(data: Statistics): boolean {
     if (!data || ![data.total, data.open, data.resolved, data.lost, data.found, data.withdrawn, data.pendingClaims, data.recoveryRate].every((value: number) => ResponseGuard.count(value)) ||
       ![7, 14, 30].includes(data.days) || (data.category !== 'all' && !CATEGORIES.includes(data.category)) || !ResponseGuard.time(data.updatedAt) ||
+      !['today', 'latest'].includes(data.anchor) || !ResponseGuard.date(data.windowStart) || !ResponseGuard.date(data.windowEnd) ||
       !ResponseGuard.points(data.categories) || !ResponseGuard.points(data.trend)) { return false; }
+    const start = Date.parse(data.windowStart);
+    const dayMs = 86400000;
     return data.total === data.open + data.resolved && data.total === data.lost + data.found &&
+      Date.parse(data.windowEnd) - start === (data.days - 1) * dayMs &&
       data.categories.length === CATEGORIES.length && data.categories.every((point: CountPoint, index: number) => point.label === CATEGORIES[index]) &&
-      data.trend.length === data.days && data.trend.every((point: CountPoint) => /^\d{2}-\d{2}$/.test(point.label)) &&
+      data.trend.length === data.days && data.trend.every((point: TrendPoint, index: number) =>
+        point.label === new Date(start + index * dayMs).toISOString().slice(5, 10) && ResponseGuard.count(point.resolved) && point.resolved <= point.count) &&
       data.categories.reduce((sum: number, point: CountPoint) => sum + point.count, 0) === data.total &&
-      data.trend.reduce((sum: number, point: CountPoint) => sum + point.count, 0) === data.total &&
+      data.trend.reduce((sum: number, point: TrendPoint) => sum + point.count, 0) === data.total &&
+      data.trend.reduce((sum: number, point: TrendPoint) => sum + point.resolved, 0) === data.resolved &&
       data.recoveryRate === (data.total ? Math.round(data.resolved / data.total * 100) : 0);
   }
 }

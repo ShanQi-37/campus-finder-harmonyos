@@ -54,6 +54,40 @@ test('系统复核：中文传输、发布幂等与边界状态', async t => {
     assert.equal(result.trend.reduce((sum, p) => sum + p.count, 0), result.total);
     assert.equal(result.updatedAt, '2026-01-02T16:00:00.000Z');
   });
+  await t.test('历史统计窗口使用分类内最近的有效发布日，寻回后更新原发布日期', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campus-statistics-'));
+    const file = path.join(dir, 'items.json');
+    const row = (id, createdAt, status, category = input.category) => ({ ...input, id, createdAt, status, category, owner: 'demo-user' });
+    fs.writeFileSync(file, JSON.stringify([
+      row('older', '2023-12-26T15:59:59Z', 'resolved'),
+      row('first', '2023-12-26T16:00:00Z', 'resolved'),
+      row('current', '2024-01-02T15:59:59Z', 'open'),
+      row('withdrawn', '2024-01-05T08:00:00Z', 'withdrawn'),
+      row('another-category', '2024-02-10T08:00:00Z', 'open', '电子数码'),
+      row('future', '2999-01-01T00:00:00Z', 'open')
+    ]));
+    try {
+      await withServer(async ({ call }) => {
+        assert.equal((await call('/api/statistics')).data.total, 0);
+        assert.equal((await call('/api/statistics?anchor=unknown')).status, 400);
+        const base = '/api/statistics?anchor=latest&category=';
+        const cards = base + encodeURIComponent(input.category);
+        const before = (await call(cards)).data;
+        assert.equal(before.windowStart, '2023-12-27');
+        assert.equal(before.windowEnd, '2024-01-02');
+        assert.equal(before.total, 2);
+        assert.equal(before.resolved, 1);
+        assert.deepEqual(before.trend[0], { label: '12-27', count: 1, resolved: 1 });
+        assert.deepEqual(before.trend.at(-1), { label: '01-02', count: 1, resolved: 0 });
+        assert.equal((await call(base + 'all')).data.windowEnd, '2024-02-10');
+        assert.equal((await call(base + encodeURIComponent('学习文具'))).data.total, 0);
+        assert.equal((await call('/api/items/current/resolve', {})).status, 200);
+        const after = (await call(cards)).data;
+        assert.equal(after.recoveryRate, 100);
+        assert.deepEqual(after.trend.at(-1), { label: '01-02', count: 1, resolved: 1 });
+      }, { file, delay: 0 });
+    } finally { fs.unlinkSync(file); fs.rmdirSync(dir); }
+  });
   await t.test('非法筛选、空白发布标识和非法UTF8均返回400且服务继续可用', async () => withServer(async ({ base, call }) => {
     for (const query of ['kind=unknown', 'category=unknown', 'status=unknown', 'owner=unknown', 'sort=unknown', 'saved=unknown', 'page=1.5']) assert.equal((await call('/api/items?' + query)).status, 400, query);
     assert.equal((await call('/api/items', { ...input, requestId: ' ' })).status, 400);

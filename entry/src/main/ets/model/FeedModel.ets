@@ -8,6 +8,7 @@ export class FeedModel {
   @Trace kind: string = 'all';
   @Trace category: string = 'all';
   @Trace keyword: string = '';
+  @Trace keywordInput: string = '';
   @Trace status: string = 'all';
   @Trace sort: string = 'latest';
   @Trace total: number = 0;
@@ -32,7 +33,19 @@ export class FeedModel {
       this.items = []; this.phase = 'error'; this.error = (error as Error).message;
     }
   }
-  reset(): void { this.keyword = ''; this.kind = 'all'; this.category = 'all'; this.status = 'all'; this.sort = 'latest'; this.load(); }
+  search(): Promise<void> {
+    this.keyword = this.keywordInput.trim();
+    return this.load();
+  }
+  reset(): void {
+    this.keywordInput = '';
+    this.keyword = '';
+    this.kind = 'all';
+    this.category = 'all';
+    this.status = 'all';
+    this.sort = 'latest';
+    this.load();
+  }
   turn(delta: number): void { if (this.phase === 'loading' || this.page + delta < 1) { return; } this.page += delta; this.load(false); }
   cancel(): void { this.generation++; }
 }

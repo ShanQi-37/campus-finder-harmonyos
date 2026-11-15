@@ -4,6 +4,7 @@ const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const CATEGORIES = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 const dateKey = (date = new Date()) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+const normalizeSearch = text => typeof text === 'string' ? text.normalize('NFKC').toLowerCase() : '';
 function seed() {
   const rows = [
     ['图书馆捡到一张校园卡', '证件卡片', 'found', '图书馆二楼', '卡片已交至图书馆服务台，请携带能够证明身份的信息前往核对。', 'peer-01', 'open'],
@@ -35,19 +36,33 @@ function normalize(item) {
     updatedAt: item.updatedAt || item.createdAt, resolvedAt: item.resolvedAt || (item.status === 'resolved' ? item.createdAt : ''),
     requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
 }
-function aggregate(items, claims = [], days = 7, category = 'all', reference = new Date()) {
-  const today = dateKey(reference), first = dateKey(new Date(reference.getTime() - (days - 1) * 86400000));
-  const scoped = items.filter(i => { const day = dateKey(new Date(i.createdAt)); return day >= first && day <= today && (category === 'all' || i.category === category); });
+function aggregate(items, claims = [], days = 7, category = 'all', reference = new Date(), anchor = 'today') {
+  const today = dateKey(reference);
+  const dated = items.filter(i => category === 'all' || i.category === category)
+    .map(item => ({ item, day: dateKey(new Date(item.createdAt)) }));
+  const latest = anchor === 'latest' ? dated.reduce((end, { item, day }) =>
+    item.status !== 'withdrawn' && day <= today && day > end ? day : end, '') : '';
+  const windowEnd = latest || today;
+  const endTime = Date.parse(windowEnd);
+  const dates = Array.from({ length: days }, (_, index) =>
+    new Date(endTime - (days - 1 - index) * 86400000).toISOString().slice(0, 10));
+  const windowStart = dates[0];
+  const scoped = dated.filter(({ day }) => day >= windowStart && day <= windowEnd).map(({ item }) => item);
   const active = scoped.filter(i => i.status !== 'withdrawn');
+  const daily = new Map(dates.map(day => [day, { label: day.slice(5), count: 0, resolved: 0 }]));
+  for (const { item, day } of dated) {
+    const point = daily.get(day);
+    if (point && item.status !== 'withdrawn') {
+      point.count++;
+      if (item.status === 'resolved') point.resolved++;
+    }
+  }
   const total = active.length, resolved = active.filter(i => i.status === 'resolved').length;
   return { total, resolved, open: total - resolved, recoveryRate: total ? Math.round(resolved / total * 100) : 0,
     lost: active.filter(i => i.kind === 'lost').length, found: active.filter(i => i.kind === 'found').length,
     withdrawn: scoped.length - total, pendingClaims: claims.filter(c => c.status === 'pending' && active.some(i => i.id === c.itemId)).length,
     categories: CATEGORIES.map(label => ({ label, count: active.filter(i => i.category === label).length })),
-    trend: Array.from({ length: days }, (_, index) => {
-      const day = dateKey(new Date(reference.getTime() - (days - 1 - index) * 86400000));
-      return { label: day.slice(5), count: active.filter(i => dateKey(new Date(i.createdAt)) === day).length };
-    }), days, category, updatedAt: reference.toISOString() };
+    trend: [...daily.values()], days, category, anchor, windowStart, windowEnd, updatedAt: reference.toISOString() };
 }
 function createApp(options = {}) {
   const file = options.file || path.join(__dirname, 'runtime', 'items.json');
@@ -143,8 +158,9 @@ function createApp(options = {}) {
       }
       if (url.pathname === '/api/statistics' && req.method === 'GET') {
         const days = Number(url.searchParams.get('days') || 7), category = url.searchParams.get('category') || 'all';
-        if (![7, 14, 30].includes(days) || (category !== 'all' && !CATEGORIES.includes(category))) return reply(res, 400, null, '统计条件无效');
-        return reply(res, 200, aggregate(list, fault === 'empty' ? [] : store.claims, days, category));
+        const anchor = url.searchParams.get('anchor') ?? 'today';
+        if (![7, 14, 30].includes(days) || (category !== 'all' && !CATEGORIES.includes(category)) || !['today', 'latest'].includes(anchor)) return reply(res, 400, null, '统计条件无效');
+        return reply(res, 200, aggregate(list, fault === 'empty' ? [] : store.claims, days, category, new Date(), anchor));
       }
       if (url.pathname === '/api/claims' && req.method === 'GET') {
         const direction = url.searchParams.get('direction') || 'received';
@@ -167,12 +183,19 @@ function createApp(options = {}) {
         // Withdrawn notices stay in the owner's management area only.
         if (url.searchParams.get('owner') !== actor) result = result.filter(i => i.status !== 'withdrawn');
         if (url.searchParams.get('saved') === 'true') result = result.filter(i => store.favorites.some(f => f.actor === actor && f.itemId === i.id));
-        const keyword = (url.searchParams.get('keyword') || '').trim().toLowerCase();
+        const keyword = (url.searchParams.get('keyword') || '').trim();
         if (keyword.length > 80) return reply(res, 400, null, '关键词最多80字');
-        if (keyword) result = result.filter(i => `${i.title} ${i.description} ${i.location}`.toLowerCase().includes(keyword));
+        const terms = normalizeSearch(keyword).split(/\s+/u).filter(Boolean);
+        if (terms.length) {
+          result = result.filter(item => {
+            const fields = [item.title, item.location, item.description].map(normalizeSearch);
+            return terms.every(term => fields.some(field => field.includes(term)));
+          });
+        }
         const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 100);
         if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) return reply(res, 400, null, '分页参数无效');
-        const sorted = [...result].sort((a, b) => (url.searchParams.get('sort') === 'oldest' ? 1 : -1) * a.createdAt.localeCompare(b.createdAt));
+        const direction = url.searchParams.get('sort') === 'oldest' ? 1 : -1;
+        const sorted = [...result].sort((a, b) => direction * a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
         const current = Math.min(page, Math.max(1, Math.ceil(result.length / pageSize)));
         return reply(res, 200, { items: sorted.slice((current - 1) * pageSize, current * pageSize).map(view), total: result.length, page: current, pageSize, hasMore: current * pageSize < result.length });
       }

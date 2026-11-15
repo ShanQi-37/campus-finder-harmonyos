@@ -11,14 +11,27 @@ export struct StatisticsPage {
   @Local chart: string = 'overview';
   @Local days: number = 7;
   @Local category: string = 'all';
+  @Local anchor: string = 'today';
   private stack: NavPathStack = new NavPathStack();
   private generation: number = 0;
   async load(): Promise<void> {
     const ticket = ++this.generation; this.phase = 'loading';
-    try { const data = await Api.statistics(this.days, this.category); if (ticket !== this.generation) { return; } this.data = data; this.phase = data.total ? 'ready' : 'empty'; }
+    try { const data = await Api.statistics(this.days, this.category, this.anchor); if (ticket !== this.generation) { return; } this.data = data; this.phase = data.total ? 'ready' : 'empty'; }
     catch (error) { if (ticket !== this.generation) { return; } this.error = (error as Error).message; this.phase = 'error'; }
   }
   aboutToDisappear(): void { this.generation++; }
+  selectAnchor(anchor: string): void {
+    if (this.anchor === anchor) { return; }
+    this.anchor = anchor;
+    this.load();
+  }
+  retry(): void {
+    if (this.phase === 'empty') {
+      if (this.anchor === 'today') { this.anchor = 'latest'; }
+      else { this.category = 'all'; }
+    }
+    this.load();
+  }
   navigate(route: string): void {
     if (route === 'Statistics') { this.load(); }
     else if (route === 'Home') { this.stack.clear(); }
@@ -40,16 +53,24 @@ export struct StatisticsPage {
       Column({ space: 10 }) {
         PageHeader({ title: '校园互助统计', subtitle: '把善意化成可见的校园温度', back: true, onBack: () => { this.stack.pop(); } })
         Row({ space: 7 }) {
+          ChoiceChip({ label: '截至今天', selected: this.anchor === 'today', onSelect: () => this.selectAnchor('today') })
+          ChoiceChip({ label: '最近有记录', selected: this.anchor === 'latest', onSelect: () => this.selectAnchor('latest') })
+          Blank()
+          Text('刷新 ↻').fontSize(11).fontColor(Colors.green).padding(6).onClick(() => { this.load(); })
+        }.width('100%').padding({ left: 18, right: 18 })
+        Row({ space: 7 }) {
           ForEach([7, 14, 30], (days: number) => { ChoiceChip({ label: days + '日', selected: this.days === days, onSelect: () => { this.days = days; this.load(); } }) }, (days: number) => days.toString())
           Select(CATEGORY_OPTIONS).value(this.category === 'all' ? '全部分类' : this.category).font({ size: 10 }).height(32).layoutWeight(1).backgroundColor('#E4ECE4')
             .onSelect((index: number) => { this.category = index === 0 ? 'all' : CATEGORIES[index - 1]; this.load(); })
         }.width('100%').padding({ left: 18, right: 18 })
-        Row() {
-          Text('按启事发布日期筛选 · 不含已撤回').fontSize(10).fontColor(Colors.muted).layoutWeight(1)
-          Text('刷新 ↻').fontSize(11).fontColor(Colors.green).padding(6).onClick(() => { this.load(); })
-        }.width('100%').padding({ left: 18, right: 18 })
+        if (this.phase === 'ready' || this.phase === 'empty') {
+          Text(this.data.windowStart + ' 至 ' + this.data.windowEnd + ' · 按发布日期')
+            .fontSize(10).fontColor(Colors.muted).width('100%').padding({ left: 18, right: 18 })
+        }
         if (this.phase !== 'ready') {
-          StatePanel({ phase: this.phase, error: this.error, emptyText: '所选范围暂无有效启事', emptyAction: '恢复全部分类', onRetry: () => { if (this.phase === 'empty') { this.category = 'all'; this.days = 30; } this.load(); } }).layoutWeight(1)
+          StatePanel({ phase: this.phase, error: this.error, emptyText: '所选范围暂无有效启事',
+            emptyAction: this.anchor === 'today' ? '查看最近有记录的时段' : (this.category === 'all' ? '刷新统计' : '查看全部分类'),
+            onRetry: () => this.retry() }).layoutWeight(1)
         } else {
           Scroll() {
             Column({ space: 12 }) {
@@ -62,7 +83,7 @@ export struct StatisticsPage {
               Row({ space: 7 }) {
                 ChoiceChip({ label: '寻回概览', selected: this.chart === 'overview', onSelect: () => { this.chart = 'overview'; } })
                 ChoiceChip({ label: '类别分布', selected: this.chart === 'category', onSelect: () => { this.chart = 'category'; } })
-                ChoiceChip({ label: '发布趋势', selected: this.chart === 'trend', onSelect: () => { this.chart = 'trend'; } })
+                ChoiceChip({ label: '发布与寻回', selected: this.chart === 'trend', onSelect: () => { this.chart = 'trend'; } })
               }.width('100%')
               if (this.chart === 'overview') { RecoveryChart({ data: this.data }) }
               else if (this.chart === 'category') { CategoryChart({ points: this.data.categories }) }

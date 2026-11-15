@@ -33,6 +33,22 @@ test('原生响应校验器：真实服务契约与损坏结构', async t => {
       assert.equal(guard.claims({ claims: [], pending: 1 }), false);
       for (const broken of [{ ...stats, total: stats.total + 1 }, { ...stats, recoveryRate: 101 }, { ...stats, trend: [] }, { ...stats, categories: [null] }, { ...stats, open: 1.5 }]) assert.equal(guard.statistics(broken), false);
     });
+    await t.test('原生统计API发送历史模式并拦截日期、寻回数或筛选条件不一致的响应', async () => {
+      const category = '证件卡片';
+      const query = '/api/statistics?days=14&category=' + encodeURIComponent(category) + '&anchor=latest';
+      const actual = await get(query);
+      let data = actual;
+      const http = { RequestMethod: { GET: 'GET' }, HttpDataType: { STRING: 'STRING' }, createHttp: () => ({ request: async url => {
+        assert.equal(new URL(url).pathname + new URL(url).search, query);
+        return { responseCode: 200, result: JSON.stringify({ code: 0, message: 'ok', data }) };
+      }, destroy: () => {} }) };
+      const { Api } = loadEts('service/Api.ets', { '@kit.NetworkKit': { http } });
+      assert.equal((await Api.statistics(14, category, 'latest')).windowEnd, actual.windowEnd);
+      for (const change of [{ anchor: 'today' }, { windowStart: '2024-02-30' }, { trend: [{ ...actual.trend[0], resolved: 99 }, ...actual.trend.slice(1)] }, { trend: [...actual.trend].reverse() }]) {
+        data = { ...actual, ...change };
+        await assert.rejects(() => Api.statistics(14, category, 'latest'), /返回统计格式异常/);
+      }
+    });
     await t.test('合法JSON但字段损坏时，所有读写API都报可读错误并销毁HTTP对象', async () => {
       let destroys = 0, payload = { code: 0, message: 'ok', data: { items: [null] } };
       const http = { RequestMethod: { GET: 'GET', POST: 'POST' }, HttpDataType: { STRING: 'STRING' }, createHttp: () => ({ request: async () => ({ responseCode: 200, result: JSON.stringify(payload) }), destroy: () => { destroys++; } }) };
@@ -71,6 +87,36 @@ test('原生FeedModel：受控乱序、取消和分页恢复', async t => {
   await t.test('取消后的响应不写入页面，后续重新加载仍可成功', async () => {
     const { model, pending } = modelFixture(); const cancelled = model.load(); model.cancel(); pending[0].resolve(result('cancelled')); await cancelled;
     assert.equal(model.items.length, 0); const next = model.load(); pending[1].resolve(result('current')); await next; assert.equal(model.items[0].id, 'current');
+  });
+  await t.test('输入中的草稿不影响翻页与重试，提交新词才回到第一页', async () => {
+    const { model, pending } = modelFixture();
+    model.keywordInput = '  校园卡  ';
+    const first = model.search();
+    assert.equal(pending[0].args[2], '校园卡');
+    pending[0].resolve({ ...result('one'), total: 3, hasMore: true });
+    await first;
+    model.keywordInput = '图书馆';
+    model.turn(1);
+    assert.equal(pending[1].args[2], '校园卡');
+    assert.equal(pending[1].args[7], 2);
+    pending[1].reject(new Error('offline'));
+    await flush();
+    const retry = model.load(false);
+    assert.equal(pending[2].args[2], '校园卡');
+    assert.equal(pending[2].args[7], 2);
+    pending[2].resolve({ ...result('two', 2), total: 3 });
+    await retry;
+    const next = model.search();
+    assert.equal(pending[3].args[2], '图书馆');
+    assert.equal(pending[3].args[7], 1);
+    pending[3].resolve(result('new'));
+    await next;
+    assert.equal(model.items[0].id, 'new');
+    model.reset();
+    assert.equal(model.keywordInput, '');
+    assert.equal(pending[4].args[2], '');
+    pending[4].resolve(result('reset'));
+    await flush();
   });
   await t.test('返回刷新保留当前请求页并采用服务端收敛页码，重置筛选正常进入空状态', async () => {
     const { model, pending } = modelFixture(); model.page = 3; const refresh = model.load(false); assert.equal(pending[0].args[7], 3);

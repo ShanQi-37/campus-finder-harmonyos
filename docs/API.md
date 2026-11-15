@@ -18,9 +18,11 @@
 | POST | /api/items/:id/claims | 他人提交认领或线索，201 |
 | GET | /api/claims?direction=received或sent | 当前身份收到/发出的申请 |
 | POST | /api/claims/:id/accept或reject或cancel | 发布者接受/拒绝，申请者取消 |
-| GET | /api/statistics?days=7或14或30&category=all或类别 | 动态聚合 |
+| GET | /api/statistics?days=7或14或30&category=all或类别&anchor=today或latest | 动态聚合 |
 
-列表参数kind=all/lost/found，category=all或四类别，keyword匹配标题/地点/描述（最多80字），owner可为空、all或三种合法体验身份，status=all/open/resolved/withdrawn，sort=latest/oldest，saved=true/false，page正整数，pageSize=1..100。客户端每页2条，接口默认100；返回items,total,page,pageSize,hasMore。撤回启事仅本人管理列表可见，他人访问详情404。
+列表参数kind=all/lost/found，category=all或四类别，keyword匹配标题、地点或描述（最多80字），owner可为空、all或三种合法体验身份，status=all/open/resolved/withdrawn，sort=latest/oldest，saved=true/false，page正整数，pageSize=1..100。客户端每页2条，接口默认100。返回items,total,page,pageSize,hasMore。撤回启事仅本人管理列表可见，他人访问详情404。
+
+搜索词按空白分隔，每个词至少出现在一个可搜索字段，词序不影响结果。关键词与字段均统一全角、半角和字母大小写。创建时间相同的启事按 ID 排序，分页顺序固定。
 
 发布/编辑字段：title2–36字、location2–30字、description8–300字、contact2–60字、kind、category、occurredAt（可选，默认今日，合法YYYY-MM-DD且不得晚于上海当日）、requestId（可选，提供时必须为1–80字非空字符串）。服务端生成UUID与createdAt。编辑保留id/owner/createdAt；已有待核对申请时禁止改变类型/分类，防止证据指向变化。其余线索可补充，核对时以当前启事为准。
 
@@ -30,7 +32,9 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 
 启事：open→resolved；open→withdrawn→open。已寻回不再编辑/撤回/恢复。申请：pending→accepted/rejected/cancelled。接受仅由启事所属身份执行，并在同一快照中将物品设resolved、当前申请accepted、其他pending设rejected；直接寻回或撤回将pending设cancelled。相同目标的重复处理返回原结果，冲突目标409。必须实际核实并交接后才在界面确认。
 
-统计按createdAt上海日期筛选含今日7/14/30日，按category组合过滤，withdrawn不计入有效总量；恢复后重新计入原发布日。total=open+resolved=lost+found=sum(categories)=sum(trend)。recoveryRate=round(resolved/total*100)，无数据为0；pendingClaims只计所选有效启事的pending，withdrawn独立返回。趋势表示当前有效启事在各发布日的数量，不是不可变的历史快照。
+统计按 `createdAt` 的上海日期筛选 7/14/30 日，返回包含首尾的 `windowStart` 和 `windowEnd`。默认 `anchor=today` 截至今天；`anchor=latest` 截至所选类别最近一条有效启事的发布日期，找不到有效记录时仍以今天为终点。两个模式都排除未来记录，`updatedAt` 始终是本次统计时间。
+
+已撤回启事独立计入 `withdrawn`，恢复后重新计入原发布日。`total = open + resolved = lost + found = sum(categories.count) = sum(trend.count)`；`sum(trend.resolved) = resolved`。`trend` 的每点含 `label`（月-日）、`count`（有效启事数）和 `resolved`（其中当前已寻回数）。确认寻回后会更新该启事**发布日**的寻回数量。`recoveryRate` 为四舍五入后的百分比，无数据为 0；`pendingClaims` 只计范围内有效启事的待核对申请。
 
 存储 `mock/runtime/items.json`：`{version:2,items,claims,favorites,drafts}`。兼容旧数组，保留记录并映射旧的其他虚构身份至peer-01。每次完整快照写同目录临时文件→重命名→替换内存；任何写入失败500且内存不变。非对象JSON、异常ID编码、超大请求均拒绝。单进程中读改写同步，不支持多进程同时写文件。
 
