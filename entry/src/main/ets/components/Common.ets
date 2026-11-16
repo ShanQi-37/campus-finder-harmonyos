@@ -110,7 +110,14 @@ export struct NoticeStatus {
 @ComponentV2
 export struct ItemCard {
   @Param item: Item = emptyItem();
+  @Param showPublishedDate: boolean = false;
   @Event onOpen: (id: string) => void = () => {};
+  itemDate(): string {
+    if (this.showPublishedDate) {
+      return new Date(this.item.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }).slice(5) + ' 发布';
+    }
+    return this.item.occurredAt.slice(5);
+  }
   build() {
     Row({ space: 11 }) {
       Image(categoryArt(this.item.category)).width(62).height(72).objectFit(ImageFit.Contain)
@@ -124,7 +131,7 @@ export struct ItemCard {
         Text(this.item.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
           .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
         Row({ space: 5 }) {
-          Text(this.item.location + ' · ' + this.item.occurredAt.slice(5)).fontSize(12).fontColor(Colors.muted)
+          Text(this.item.location + ' · ' + this.itemDate()).fontSize(12).fontColor(Colors.muted)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           if (this.item.saved) { Text('★').fontSize(13).fontColor(Colors.green).accessibilityText('已收藏') }
         }.width('100%')

@@ -27,8 +27,10 @@ export struct CategoryChart {
 @ComponentV2
 export struct TrendChart {
   @Param points: TrendPoint[] = [];
+  @Param selectedDay: number = 0;
+  @Event onSelectDay: (day: number) => void = () => {};
+  @Event onBrowseDay: (index: number) => void = () => {};
   @Local chartWidth: number = 270;
-  @Local selectedDay: number = 0;
   maxCount(): number { return Math.max(1, ...this.points.map((point: TrendPoint) => point.count)); }
   dayIndex(): number {
     return this.selectedDay === 0 ? this.points.length - 1 : Math.min(this.selectedDay, this.points.length) - 1;
@@ -89,15 +91,19 @@ export struct TrendChart {
       }.width('100%').height(16)
       if (this.points.length > 0) {
         Column({ space: 5 }) {
-          Text(this.points[this.dayIndex()].label + ' 发布').fontSize(14).fontWeight(FontWeight.Bold)
-            .fontColor(Colors.ink).width('100%')
+          Row({ space: 4 }) {
+            Text(this.points[this.dayIndex()].label + ' 发布').fontSize(14).fontWeight(FontWeight.Bold)
+              .fontColor(Colors.ink).layoutWeight(1)
+            Button('查看当日启事 ›').height(36).fontSize(11).fontColor(Colors.green).backgroundColor(Colors.surface)
+              .enabled(this.points[this.dayIndex()].count > 0).onClick(() => this.onBrowseDay(this.dayIndex()))
+          }.width('100%')
           Text('有效启事 ' + this.points[this.dayIndex()].count + ' 条 · 其中已寻回 ' +
             this.points[this.dayIndex()].resolved + ' 条').fontSize(12).fontColor(Colors.ink).width('100%')
           if (this.points.length > 1) {
             Slider({ value: this.dayIndex() + 1, min: 1, max: this.points.length, step: 1 })
               .selectedColor('#447C60').width('100%').height(44)
               .accessibilityText('选择发布日期').accessibilityDescription(this.points[this.dayIndex()].label)
-              .onChange((value: number) => { this.selectedDay = Math.round(value); })
+              .onChange((value: number) => this.onSelectDay(Math.round(value)))
           }
         }.width('100%').backgroundColor('#F1F5EF').borderRadius(12).padding({ left: 12, right: 12, top: 8, bottom: 3 })
       }

@@ -6,6 +6,7 @@ import { Colors, ItemCard, SegmentTab, StatePanel } from './Common';
 export struct FeedContent {
   @Param model: FeedModel = new FeedModel();
   @Param filters: boolean = true;
+  @Param showPublishedDate: boolean = false;
   @Event onOpen: (id: string) => void = () => {};
   @Event onRefresh: () => void = () => {};
   @Local filtersOpen: boolean = false;
@@ -128,7 +129,9 @@ export struct FeedContent {
       } else {
         List({ space: 8 }) {
           ForEach(this.model.items, (item: Item) => {
-            ListItem() { ItemCard({ item: item, onOpen: (id: string) => this.onOpen(id) }) }
+            ListItem() {
+              ItemCard({ item: item, showPublishedDate: this.showPublishedDate, onOpen: (id: string) => this.onOpen(id) })
+            }
           }, (item: Item) => item.id)
         }.layoutWeight(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Auto).width('100%')
         if (this.model.hasMore || this.model.page > 1) { this.pagination() }

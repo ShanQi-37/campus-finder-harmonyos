@@ -24,6 +24,8 @@
 
 搜索词按空白分隔，每个词至少出现在一个可搜索字段，词序不影响结果。关键词与字段均统一全角、半角和字母大小写。创建时间相同的启事按 ID 排序，分页顺序固定。
 
+统计明细同时传递 `publishedFrom` 与 `publishedTo`。两个参数使用 `YYYY-MM-DD`，按 `createdAt` 的上海日期匹配并包含首尾。无效日期、反向区间和未来结束日期返回 400。日期条件可与类别和状态组合，分页在筛选后执行。统计明细使用公开列表的可见范围，已撤回启事不计入有效结果。
+
 发布/编辑字段：title2–36字、location2–30字、description8–300字、contact2–60字、kind、category、occurredAt（可选，默认今日，合法YYYY-MM-DD且不得晚于上海当日）、requestId（可选，提供时必须为1–80字非空字符串）。服务端生成UUID与createdAt。编辑保留id/owner/createdAt；已有待核对申请时禁止改变类型/分类，防止证据指向变化。其余线索可补充，核对时以当前启事为准。
 
 Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPending,claimCount,contactVisible。联系指引仅所属身份或已接受申请者可见；其他响应不返回原联系内容。

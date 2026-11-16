@@ -79,15 +79,39 @@ test('系统复核：中文传输、发布幂等与边界状态', async t => {
         assert.equal(before.resolved, 1);
         assert.deepEqual(before.trend[0], { label: '12-27', count: 1, resolved: 1 });
         assert.deepEqual(before.trend.at(-1), { label: '01-02', count: 1, resolved: 0 });
+        const category = encodeURIComponent(input.category);
+        const list = '/api/items?category=' + category;
+        const range = '&publishedFrom=' + before.windowStart + '&publishedTo=' + before.windowEnd;
+        const items = (await call(list + range)).data;
+        assert.equal(items.total, before.total);
+        assert.deepEqual(items.items.map(item => item.id), ['current', 'first']);
+        assert.equal((await call(list + range + '&status=resolved')).data.total, before.resolved);
+        assert.equal((await call(list + range + '&status=open')).data.total, before.open);
+        const day = (await call(list + '&publishedFrom=2024-01-02&publishedTo=2024-01-02')).data;
+        assert.equal(day.total, before.trend.at(-1).count);
+        assert.deepEqual(day.items.map(item => item.id), ['current']);
+        assert.equal((await call(list + '&publishedFrom=2024-01-05&publishedTo=2024-01-05')).data.total, 0);
+        const firstPage = (await call(list + range + '&pageSize=1&page=1')).data;
+        const secondPage = (await call(list + range + '&pageSize=1&page=2')).data;
+        assert.deepEqual([firstPage.items[0].id, secondPage.items[0].id], ['current', 'first']);
         assert.equal((await call(base + 'all')).data.windowEnd, '2024-02-10');
         assert.equal((await call(base + encodeURIComponent('学习文具'))).data.total, 0);
         assert.equal((await call('/api/items/current/resolve', {})).status, 200);
         const after = (await call(cards)).data;
         assert.equal(after.recoveryRate, 100);
+        assert.equal((await call(list + range + '&status=resolved')).data.total, after.resolved);
         assert.deepEqual(after.trend.at(-1), { label: '01-02', count: 1, resolved: 1 });
       }, { file, delay: 0 });
     } finally { fs.unlinkSync(file); fs.rmdirSync(dir); }
   });
+  await t.test('发布日期范围同时校验首尾，拒绝反向、无效日和未来结束日', async () => withServer(async ({ call }) => {
+    for (const query of ['publishedFrom=2024-01-01', 'publishedTo=2024-01-01',
+      'publishedFrom=&publishedTo=2024-01-01', 'publishedFrom=2024-02-30&publishedTo=2024-03-02',
+      'publishedFrom=2024-03-02&publishedTo=2024-03-01', 'publishedFrom=2024-01-01&publishedTo=2999-01-01']) {
+      assert.equal((await call('/api/items?' + query)).status, 400, query);
+    }
+    assert.equal((await call('/api/items')).data.total, 12);
+  }));
   await t.test('非法筛选、空白发布标识和非法UTF8均返回400且服务继续可用', async () => withServer(async ({ base, call }) => {
     for (const query of ['kind=unknown', 'category=unknown', 'status=unknown', 'owner=unknown', 'sort=unknown', 'saved=unknown', 'page=1.5']) assert.equal((await call('/api/items?' + query)).status, 400, query);
     assert.equal((await call('/api/items', { ...input, requestId: ' ' })).status, 400);

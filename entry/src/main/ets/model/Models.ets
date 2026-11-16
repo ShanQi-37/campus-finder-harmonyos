@@ -6,6 +6,8 @@ export interface Item {
   saved: boolean; myPending: boolean; claimCount: number; history: TimelineEvent[];
 }
 export interface ItemList { items: Item[]; total: number; page: number; pageSize: number; hasMore: boolean; }
+export interface PublicationWindow { start: string; end: string; }
+export interface StatisticsScope { window: PublicationWindow; category: string; status: string; }
 export interface CountPoint { label: string; count: number; }
 export interface TrendPoint extends CountPoint { resolved: number; }
 export interface Statistics {

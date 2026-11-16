@@ -1,5 +1,6 @@
 import { http } from '@kit.NetworkKit';
-import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, PersonalSummary, PublishInput, Statistics } from '../model/Models';
+import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, PersonalSummary, PublicationWindow,
+  PublishInput, Statistics } from '../model/Models';
 import { ResponseGuard } from './ResponseGuard';
 import { Session } from '../model/Session';
 interface Envelope<T> { code: number; message: string; data: T; }
@@ -26,8 +27,15 @@ export class Api {
       throw new Error(businessMessage.length ? businessMessage : '连接失败或数据异常，请检查网络后重试');
     } finally { client.destroy(); }
   }
-  static async list(kind: string, category: string, keyword: string, owner: string = '', status: string = 'all', sort: string = 'latest', saved: boolean = false, page: number = 1): Promise<ItemList> {
-    const data = await Api.request<ItemList>('/api/items?kind=' + encodeURIComponent(kind) + '&category=' + encodeURIComponent(category) + '&keyword=' + encodeURIComponent(keyword) + '&owner=' + encodeURIComponent(owner) + '&status=' + encodeURIComponent(status) + '&sort=' + sort + '&saved=' + saved + '&pageSize=6&page=' + page);
+  static async list(kind: string, category: string, keyword: string, owner: string = '', status: string = 'all',
+    sort: string = 'latest', saved: boolean = false, page: number = 1, window?: PublicationWindow): Promise<ItemList> {
+    let query = '/api/items?kind=' + encodeURIComponent(kind) + '&category=' + encodeURIComponent(category) +
+      '&keyword=' + encodeURIComponent(keyword) + '&owner=' + encodeURIComponent(owner) +
+      '&status=' + encodeURIComponent(status) + '&sort=' + sort + '&saved=' + saved + '&pageSize=6&page=' + page;
+    if (window !== undefined) {
+      query += '&publishedFrom=' + encodeURIComponent(window.start) + '&publishedTo=' + encodeURIComponent(window.end);
+    }
+    const data = await Api.request<ItemList>(query);
     if (!ResponseGuard.list(data)) { throw new Error('返回列表格式异常'); }
     return data;
   }

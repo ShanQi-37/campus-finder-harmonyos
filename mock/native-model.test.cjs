@@ -74,6 +74,24 @@ function modelFixture() {
 }
 const result = (id, page = 1) => ({ items: [{ id }], total: 1, page, pageSize: 2, hasMore: false });
 test('原生FeedModel：受控乱序、取消和分页恢复', async t => {
+  await t.test('统计明细保持日期、类别和状态，翻页沿用同一统计范围', async () => {
+    const { model, pending } = modelFixture();
+    const window = { start: '2025-12-28', end: '2026-01-03' };
+    model.category = '证件卡片';
+    model.status = 'resolved';
+    model.publicationWindow = window;
+    const first = model.load();
+    assert.deepEqual(pending[0].args.slice(0,5), ['all','证件卡片','','','resolved']);
+    assert.equal(pending[0].args[8], window);
+    pending[0].resolve({ ...result('first'), total: 3, hasMore: true });
+    await first;
+    model.turn(1);
+    assert.equal(pending[1].args[7], 2);
+    assert.equal(pending[1].args[8], window);
+    pending[1].resolve({ ...result('last', 2), total: 3 });
+    await flush();
+    assert.equal(model.page, 2);
+  });
   await t.test('较旧成功响应不会覆盖较新的筛选结果', async () => {
     const { model, pending } = modelFixture(); const older = model.load(); model.keyword = 'new'; const newer = model.load();
     pending[1].resolve(result('new')); await newer; pending[0].resolve(result('old')); await older;

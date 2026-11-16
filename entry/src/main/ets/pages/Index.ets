@@ -7,6 +7,7 @@ import { DetailPage } from './DetailPage';
 import { PublishPage } from './PublishPage';
 import { MyPage } from './MyPage';
 import { StatisticsPage } from './StatisticsPage';
+import { StatisticsItemsPage } from './StatisticsItemsPage';
 import { ClaimFormPage } from './ClaimFormPage';
 import { ClaimCenterPage } from './ClaimCenterPage';
 @Entry
@@ -33,6 +34,7 @@ struct Index {
     else if (name === 'Publish') { PublishPage() }
     else if (name === 'My') { MyPage() }
     else if (name === 'Statistics') { StatisticsPage() }
+    else if (name === 'StatisticsItems') { StatisticsItemsPage() }
     else if (name === 'ClaimForm') { ClaimFormPage() }
     else if (name === 'ClaimCenter') { ClaimCenterPage() }
   }

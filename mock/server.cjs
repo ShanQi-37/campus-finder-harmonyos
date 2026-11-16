@@ -4,6 +4,10 @@ const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const CATEGORIES = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 const dateKey = (date = new Date()) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+function isDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+}
 const normalizeSearch = text => typeof text === 'string' ? text.normalize('NFKC').toLowerCase() : '';
 function seed() {
   const rows = [
@@ -183,6 +187,17 @@ function createApp(options = {}) {
         // Withdrawn notices stay in the owner's management area only.
         if (url.searchParams.get('owner') !== actor) result = result.filter(i => i.status !== 'withdrawn');
         if (url.searchParams.get('saved') === 'true') result = result.filter(i => store.favorites.some(f => f.actor === actor && f.itemId === i.id));
+        const from = url.searchParams.get('publishedFrom');
+        const to = url.searchParams.get('publishedTo');
+        if (from !== null || to !== null) {
+          if (!isDateKey(from) || !isDateKey(to) || from > to || to > dateKey()) {
+            return reply(res, 400, null, '发布日期范围无效');
+          }
+          result = result.filter(item => {
+            const published = dateKey(new Date(item.createdAt));
+            return published >= from && published <= to;
+          });
+        }
         const keyword = (url.searchParams.get('keyword') || '').trim();
         if (keyword.length > 80) return reply(res, 400, null, '关键词最多80字');
         const terms = normalizeSearch(keyword).split(/\s+/u).filter(Boolean);
@@ -204,7 +219,7 @@ function createApp(options = {}) {
           if (typeof body[key] !== 'string' || body[key].trim().length < min || body[key].trim().length > max) return `${label}长度应为${min}-${max}字`;
         }
         if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind)) return '分类或类型无效';
-        if (body.occurredAt !== undefined && (typeof body.occurredAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(body.occurredAt) || !Number.isFinite(Date.parse(body.occurredAt)) || new Date(body.occurredAt).toISOString().slice(0, 10) !== body.occurredAt || body.occurredAt > dateKey())) return '日期需为有效的YYYY-MM-DD，且不能晚于今天';
+        if (body.occurredAt !== undefined && (!isDateKey(body.occurredAt) || body.occurredAt > dateKey())) return '日期需为有效的YYYY-MM-DD，且不能晚于今天';
         if (body.requestId !== undefined && (typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80)) return '请求标识无效';
         return '';
       };
