@@ -126,8 +126,16 @@ export struct DetailPage {
             } else {
               Row({ space: 10 }) {
                 Button(this.item.saved ? '★ 已收藏' : '☆ 收藏').height(44).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.soft).onClick(() => { this.action('favorite'); })
-                Button(this.item.status === 'open' ? (this.item.myPending ? '已提交 · 查看申请' : (this.item.kind === 'found' ? '这是我的 · 申请认领' : '我有线索 · 联系发布者')) : '查看我的申请').height(44).fontSize(12).backgroundColor(Colors.green).layoutWeight(1)
-                  .onClick(() => { this.stack.pushPath({ name: this.item.status === 'open' && !this.item.myPending ? 'ClaimForm' : 'ClaimCenter', param: this.item.status === 'open' && !this.item.myPending ? this.itemId : 'sent' }); })
+                Button(this.item.status === 'open' ? (this.item.myPending ? '查看申请进度' :
+                  (this.item.kind === 'found' ? '申请认领' : '提供线索')) : '查看申请记录')
+                  .height(44).fontSize(13).backgroundColor(Colors.green).layoutWeight(1)
+                  .onClick(() => {
+                    if (this.item.status === 'open' && !this.item.myPending) {
+                      this.stack.pushPath({ name: 'ClaimForm', param: this.itemId });
+                    } else {
+                      this.stack.pushPath({ name: 'ClaimCenter', param: this.item.myPending ? 'sent' : 'sent-history' });
+                    }
+                  })
               }.width('100%')
             }
           }.enabled(!this.busy).width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 })
