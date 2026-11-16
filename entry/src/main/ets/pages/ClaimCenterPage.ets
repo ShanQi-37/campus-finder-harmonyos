@@ -94,6 +94,24 @@ export struct ClaimCenterPage {
     return '#FCF0D8';
   }
 
+  guidanceTitle(status: string): string {
+    if (status === 'pending') {
+      return this.boxDirection === 'received' ? '等你核对' : '等待发布者核对';
+    }
+    if (status === 'accepted') { return '已确认寻回'; }
+    return status === 'rejected' ? '本次申请未通过' : '本次申请已取消';
+  }
+
+  guidanceText(status: string): string {
+    if (status === 'pending') {
+      return this.boxDirection === 'received'
+        ? '先查看核对说明。线下核实并交接后，再点「确认寻回」。'
+        : '请留意联系指引中的约定。需要撤销时，可从此处取消申请。';
+    }
+    if (status === 'accepted') { return '交接已完成，可打开启事查看最新状态。'; }
+    return this.boxDirection === 'sent' ? '可打开启事查看当前状态。' : '这条申请已结束。';
+  }
+
   @Builder
   controls() {
     Column({ space: 8 }) {
@@ -143,7 +161,12 @@ export struct ClaimCenterPage {
       }.width('100%')
       Text((this.boxDirection === 'received' ? '申请人  ' + claim.senderName : '发布者  ' + claim.ownerName))
         .fontSize(12).fontColor(Colors.muted).width('100%')
-      Divider().color(Colors.stroke)
+      Column({ space: 5 }) {
+        Text(this.guidanceTitle(claim.status)).fontSize(13).fontWeight(FontWeight.Bold)
+          .fontColor(Colors.ink).width('100%')
+        Text(this.guidanceText(claim.status)).fontSize(12).fontColor(Colors.ink)
+          .lineHeight(19).width('100%')
+      }.width('100%').padding(10).backgroundColor(this.statusFill(claim.status)).borderRadius(10)
       Text('核对说明').fontSize(12).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
       Text(claim.proof).fontSize(13).lineHeight(21).fontColor(Colors.ink).width('100%')
       Column({ space: 4 }) {
@@ -160,7 +183,6 @@ export struct ClaimCenterPage {
       }.width('100%')
       if (claim.status === 'pending') {
         if (this.boxDirection === 'received') {
-          Text('完成线下核对和交接后，再确认寻回。').fontSize(11).fontColor(Colors.muted).width('100%')
           Row({ space: 8 }) {
             Button('不通过').height(43).fontSize(13).fontColor(Colors.red).backgroundColor('#FAEBE7')
               .layoutWeight(1).onClick(() => this.confirm(claim, 'reject'))
@@ -168,11 +190,8 @@ export struct ClaimCenterPage {
               .layoutWeight(2).onClick(() => this.confirm(claim, 'accept'))
           }.width('100%')
         } else {
-          Row({ space: 8 }) {
-            Text('等待发布者核对').fontSize(12).fontColor(Colors.muted).layoutWeight(1)
-            Button('取消申请').height(40).fontSize(12).fontColor(Colors.red).backgroundColor('#FAEBE7')
-              .onClick(() => this.confirm(claim, 'cancel'))
-          }.width('100%')
+          Button('取消申请').height(42).width('100%').fontSize(13).fontColor(Colors.red)
+            .backgroundColor('#FAEBE7').onClick(() => this.confirm(claim, 'cancel'))
         }
       }
     }.padding(13).width('100%').backgroundColor(Colors.surface).borderRadius(16)

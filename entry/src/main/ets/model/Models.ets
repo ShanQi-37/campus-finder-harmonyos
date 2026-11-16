@@ -24,6 +24,7 @@ export interface Claim {
 export interface ClaimList { claims: Claim[]; pending: number; }
 export interface MatchLead { item: Item; reasons: string[]; }
 export interface MatchList { matches: MatchLead[]; }
+export interface MatchSelection { sourceId: string; candidateId: string; }
 export interface DraftState { exists: boolean; input: PublishInput | null; updatedAt: string; }
 export interface PersonalSummary { posted: number; open: number; resolved: number; saved: number; incomingPending: number; outgoingPending: number; draftTitle: string; draftUpdatedAt: string; }
 export function emptySummary(): PersonalSummary { return { posted: 0, open: 0, resolved: 0, saved: 0, incomingPending: 0, outgoingPending: 0, draftTitle: '', draftUpdatedAt: '' }; }

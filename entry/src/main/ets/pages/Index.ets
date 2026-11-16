@@ -4,6 +4,7 @@ import { Colors, PageHeader } from '../components/Common';
 import { BottomNav } from '../components/BottomNav';
 import { FeedContent } from '../components/FeedContent';
 import { DetailPage } from './DetailPage';
+import { MatchComparePage } from './MatchComparePage';
 import { PublishPage } from './PublishPage';
 import { MyPage } from './MyPage';
 import { StatisticsPage } from './StatisticsPage';
@@ -31,6 +32,7 @@ struct Index {
   @Builder
   destination(name: string) {
     if (name === 'Detail') { DetailPage() }
+    else if (name === 'MatchCompare') { MatchComparePage() }
     else if (name === 'Publish') { PublishPage() }
     else if (name === 'My') { MyPage() }
     else if (name === 'Statistics') { StatisticsPage() }

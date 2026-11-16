@@ -1,4 +1,4 @@
-import { Item, MatchLead, TimelineEvent, emptyItem } from '../model/Models';
+import { Item, MatchLead, MatchSelection, TimelineEvent, emptyItem } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
 import { categoryArt, Colors, ItemCard, NoticeStatus, PageHeader, SegmentTab, StatePanel } from '../components/Common';
@@ -18,9 +18,11 @@ export struct DetailPage {
   private changed: boolean = false;
   private active: boolean = true;
   private generation: number = 0;
-  async load(): Promise<void> {
+  async load(keepVisible: boolean = false): Promise<void> {
     if (!this.itemId.length) { return; }
-    const ticket = ++this.generation; this.phase = 'loading'; this.error = '';
+    const ticket = ++this.generation;
+    if (!keepVisible) { this.phase = 'loading'; }
+    this.error = '';
     try { const result = await Api.detail(this.itemId); if (this.active && ticket === this.generation) { this.item = result; this.phase = 'ready'; } }
     catch (error) { if (this.active && ticket === this.generation) { this.error = (error as Error).message; this.phase = 'error'; } }
   }
@@ -30,10 +32,17 @@ export struct DetailPage {
     catch (error) { if (this.active) { this.error = (error as Error).message; } }
     finally { this.busy = false; }
   }
-  async loadMatches(): Promise<void> {
-    this.section = 'matches'; const ticket = ++this.matchGeneration; this.matchPhase = 'loading'; this.matchError = '';
+  async loadMatches(keepVisible: boolean = false): Promise<void> {
+    this.section = 'matches';
+    const ticket = ++this.matchGeneration;
+    if (!keepVisible) { this.matchPhase = 'loading'; }
+    this.matchError = '';
     try { const result = await Api.matches(this.itemId); if (this.active && ticket === this.matchGeneration) { this.leads = result.matches; this.matchPhase = result.matches.length ? 'ready' : 'empty'; } }
     catch (error) { if (this.active && ticket === this.matchGeneration) { this.matchError = (error as Error).message; this.matchPhase = 'error'; } }
+  }
+  compare(candidateId: string): void {
+    const selection: MatchSelection = { sourceId: this.itemId, candidateId: candidateId };
+    this.stack.pushPath({ name: 'MatchCompare', param: selection });
   }
   confirm(action: string): void {
     this.getUIContext().showAlertDialog({ title: action === 'resolve' ? '已核对并完成交接？' : '确定撤回这条启事？',
@@ -86,14 +95,17 @@ export struct DetailPage {
                   Text('请勿提供密码、付款或公开完整证件号码。').fontSize(10).fontColor('#A88449').width('100%')
                 }.padding(16).backgroundColor('#FFF6E6').borderRadius(16).width('100%')
               } else if (this.section === 'matches') {
-                Text('同类物品、相反启事类型；优先展示相近地点和日期。线索仅供核对，不代表认领结果。').fontSize(11).lineHeight(19).fontColor(Colors.muted).width('100%')
                 if (this.matchPhase !== 'ready') {
                   StatePanel({ phase: this.matchPhase, error: this.matchError, emptyText: this.item.status === 'open' ? '暂未找到可核对的相似线索' : '启事已结束，无需继续匹配', onRetry: () => { this.loadMatches(); } })
                 } else {
                   ForEach(this.leads, (lead: MatchLead) => {
                     Column({ space: 6 }) {
-                      Text(lead.reasons.join(' · ')).fontSize(11).fontColor(Colors.green).width('100%').padding({ left: 5 })
                       ItemCard({ item: lead.item, onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } })
+                      Row({ space: 8 }) {
+                        Text(lead.reasons.join(' · ')).fontSize(12).fontColor(Colors.muted).layoutWeight(1)
+                        Button('对比线索 ›').height(40).fontSize(13).fontColor(Colors.green).backgroundColor(Colors.soft)
+                          .accessibilityText('对比线索，' + lead.item.title).onClick(() => this.compare(lead.item.id))
+                      }.width('100%').padding({ left: 8, right: 2 })
                     }.width('100%')
                   }, (lead: MatchLead) => lead.item.id)
                 }
@@ -143,7 +155,12 @@ export struct DetailPage {
         }
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; this.itemId = context.pathInfo.param as string; })
-      .onShown(() => { this.active = true; this.load(); if (this.section === 'matches') { this.loadMatches(); } }).onHidden(() => { this.active = false; this.generation++; this.matchGeneration++; })
+      .onShown(() => {
+        this.active = true;
+        const keepMatches = this.section === 'matches' && this.matchPhase === 'ready';
+        this.load(keepMatches && this.phase === 'ready');
+        if (this.section === 'matches') { this.loadMatches(keepMatches); }
+      }).onHidden(() => { this.active = false; this.generation++; this.matchGeneration++; })
       .onBackPressed(() => { this.back(); return true; })
   }
 }
