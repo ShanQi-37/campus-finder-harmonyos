@@ -19,13 +19,14 @@ export class FeedModel {
   owner: string = '';
   saved: boolean = false;
   publicationWindow?: PublicationWindow;
+  resolutionWindow?: PublicationWindow;
   async load(reset: boolean = true): Promise<void> {
     const ticket = ++this.generation;
     if (reset) { this.page = 1; }
     this.phase = 'loading'; this.error = '';
     try {
       const result = await Api.list(this.kind, this.category, this.keyword, this.owner, this.status, this.sort,
-        this.saved, this.page, this.publicationWindow);
+        this.saved, this.page, this.publicationWindow, this.resolutionWindow);
       // Requests are tagged so older results cannot overwrite a newer choice.
       if (ticket !== this.generation) { return; }
       this.items = result.items; this.total = result.total; this.hasMore = result.hasMore; this.page = result.page;

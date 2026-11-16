@@ -1,4 +1,4 @@
-param([string]$DevEcoPath = 'E:\DevEco Studio')
+﻿param([string]$DevEcoPath = 'E:\DevEco Studio')
 $ErrorActionPreference = 'Stop'
 $projectPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $nodePath = Join-Path $DevEcoPath 'tools\node\node.exe'

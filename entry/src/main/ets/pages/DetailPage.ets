@@ -103,7 +103,7 @@ export struct DetailPage {
                       ItemCard({ item: lead.item, onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } })
                       Row({ space: 8 }) {
                         Text(lead.reasons.join(' · ')).fontSize(12).fontColor(Colors.muted).layoutWeight(1)
-                        Button('对比线索 ›').height(40).fontSize(13).fontColor(Colors.green).backgroundColor(Colors.soft)
+                        Button('对比线索 ›').constraintSize({ minHeight: 40 }).fontSize(13).fontColor(Colors.green).backgroundColor(Colors.soft)
                           .accessibilityText('对比线索，' + lead.item.title).onClick(() => this.compare(lead.item.id))
                       }.width('100%').padding({ left: 8, right: 2 })
                     }.width('100%')
@@ -128,19 +128,19 @@ export struct DetailPage {
             if (this.item.owner === Session.actor) {
               if (this.item.status === 'open') {
                 Row({ space: 10 }) {
-                  Button('编辑线索').height(34).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.soft).layoutWeight(1).onClick(() => { this.stack.pushPath({ name: 'Publish', param: this.itemId }); })
-                  Button('撤回启事').height(34).fontSize(12).fontColor(Colors.red).backgroundColor('#FFF0E8').layoutWeight(1).onClick(() => this.confirm('withdraw'))
+                  Button('编辑线索').constraintSize({ minHeight: 34 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.soft).layoutWeight(1).onClick(() => { this.stack.pushPath({ name: 'Publish', param: this.itemId }); })
+                  Button('撤回启事').constraintSize({ minHeight: 34 }).fontSize(12).fontColor(Colors.red).backgroundColor('#FFF0E8').layoutWeight(1).onClick(() => this.confirm('withdraw'))
                 }.width('100%')
-                Button(this.busy ? '正在保存…' : '确认已寻回').width('100%').height(44).fontSize(14).backgroundColor(Colors.green).onClick(() => this.confirm('resolve'))
+                Button(this.busy ? '正在保存…' : '确认已寻回').width('100%').constraintSize({ minHeight: 44 }).fontSize(14).backgroundColor(Colors.green).onClick(() => this.confirm('resolve'))
               } else if (this.item.status === 'withdrawn') {
-                Button('恢复到失物广场').width('100%').height(44).backgroundColor(Colors.green).onClick(() => { this.action('restore'); })
+                Button('恢复到失物广场').width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Colors.green).onClick(() => { this.action('restore'); })
               } else { Text('✓ 已完成交接，感谢你的善意').fontSize(14).fontColor(Colors.green).padding(12) }
             } else {
               Row({ space: 10 }) {
-                Button(this.item.saved ? '★ 已收藏' : '☆ 收藏').height(44).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.soft).onClick(() => { this.action('favorite'); })
+                Button(this.item.saved ? '★ 已收藏' : '☆ 收藏').constraintSize({ minHeight: 44 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.soft).onClick(() => { this.action('favorite'); })
                 Button(this.item.status === 'open' ? (this.item.myPending ? '查看申请进度' :
                   (this.item.kind === 'found' ? '申请认领' : '提供线索')) : '查看申请记录')
-                  .height(44).fontSize(13).backgroundColor(Colors.green).layoutWeight(1)
+                  .constraintSize({ minHeight: 44 }).fontSize(13).backgroundColor(Colors.green).layoutWeight(1)
                   .onClick(() => {
                     if (this.item.status === 'open' && !this.item.myPending) {
                       this.stack.pushPath({ name: 'ClaimForm', param: this.itemId });

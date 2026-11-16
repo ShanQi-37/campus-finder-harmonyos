@@ -64,14 +64,22 @@ export struct MatchComparePage {
   }
 
   @Builder
+  descriptionField(label: string, value: string) {
+    Column({ space: 5 }) {
+      Text(label).fontSize(12).fontWeight(FontWeight.Medium).fontColor(Colors.muted).width('100%')
+      Text(value).fontSize(14).lineHeight(22).fontColor(Colors.ink).width('100%')
+    }.width('100%').padding(10).backgroundColor(Colors.paper).borderRadius(10)
+  }
+
+  @Builder
   actions() {
-    Row({ space: 10 }) {
-      Button('查看候选启事').height(46).fontSize(14).fontColor(Colors.green)
-        .backgroundColor(Colors.soft).layoutWeight(1)
+    Column({ space: 8 }) {
+      Button('查看候选启事').constraintSize({ minHeight: 46 }).width('100%').fontSize(14).fontColor(Colors.green)
+        .backgroundColor(Colors.soft)
         .onClick(() => this.stack.pushPath({ name: 'Detail', param: this.candidate.id }))
       if (this.candidate.owner !== Session.actor) {
         Button(this.candidate.myPending ? '查看申请进度' : (this.candidate.kind === 'found' ? '申请认领' : '提供线索'))
-          .height(46).fontSize(14).backgroundColor(Colors.green).layoutWeight(1)
+          .constraintSize({ minHeight: 46 }).width('100%').fontSize(14).backgroundColor(Colors.green)
           .onClick(() => {
             if (this.candidate.myPending) {
               this.stack.pushPath({ name: 'ClaimCenter', param: 'sent' });
@@ -109,7 +117,8 @@ export struct MatchComparePage {
               }.width('100%').padding(12).backgroundColor(Colors.soft).borderRadius(14)
               Column({ space: 7 }) {
                 Text('物品描述').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
-                this.field('原启事 / 候选启事', this.source.description, this.candidate.description)
+                this.descriptionField('原启事', this.source.description)
+                this.descriptionField('候选启事', this.candidate.description)
               }.width('100%').padding(12).backgroundColor(Colors.surface).borderRadius(14)
             }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
           }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)

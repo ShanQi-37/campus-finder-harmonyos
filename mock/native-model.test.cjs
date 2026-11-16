@@ -31,7 +31,9 @@ test('原生响应校验器：真实服务契约与损坏结构', async t => {
     await t.test('页码、申请待办和统计恒等式不一致被识别为格式错误', () => {
       for (const broken of [{ ...list, page: 0 }, { ...list, total: -1 }, { ...list, hasMore: false }, { ...list, pageSize: '2' }]) assert.equal(guard.list(broken), false);
       assert.equal(guard.claims({ claims: [], pending: 1 }), false);
-      for (const broken of [{ ...stats, total: stats.total + 1 }, { ...stats, recoveryRate: 101 }, { ...stats, trend: [] }, { ...stats, categories: [null] }, { ...stats, open: 1.5 }]) assert.equal(guard.statistics(broken), false);
+      for (const broken of [{ ...stats, total: stats.total + 1 }, { ...stats, recoveryRate: 101 }, { ...stats, trend: [] },
+        { ...stats, recoveryTrend: [] }, { ...stats, recoveryWindowStart: '2024-02-30' }, { ...stats, undatedResolved: -1 },
+        { ...stats, categories: [null] }, { ...stats, open: 1.5 }]) assert.equal(guard.statistics(broken), false);
     });
     await t.test('原生统计API发送历史模式并拦截日期、寻回数或筛选条件不一致的响应', async () => {
       const category = '证件卡片';
@@ -44,7 +46,9 @@ test('原生响应校验器：真实服务契约与损坏结构', async t => {
       }, destroy: () => {} }) };
       const { Api } = loadEts('service/Api.ets', { '@kit.NetworkKit': { http } });
       assert.equal((await Api.statistics(14, category, 'latest')).windowEnd, actual.windowEnd);
-      for (const change of [{ anchor: 'today' }, { windowStart: '2024-02-30' }, { trend: [{ ...actual.trend[0], resolved: 99 }, ...actual.trend.slice(1)] }, { trend: [...actual.trend].reverse() }]) {
+      for (const change of [{ anchor: 'today' }, { windowStart: '2024-02-30' }, { recoveryWindowStart: '2024-02-30' },
+        { trend: [{ ...actual.trend[0], resolved: 99 }, ...actual.trend.slice(1)] }, { trend: [...actual.trend].reverse() },
+        { recoveryTrend: [...actual.recoveryTrend].reverse() }]) {
         data = { ...actual, ...change };
         await assert.rejects(() => Api.statistics(14, category, 'latest'), /返回统计格式异常/);
       }
@@ -88,6 +92,26 @@ test('原生FeedModel：受控乱序、取消和分页恢复', async t => {
     model.turn(1);
     assert.equal(pending[1].args[7], 2);
     assert.equal(pending[1].args[8], window);
+    pending[1].resolve({ ...result('last', 2), total: 3 });
+    await flush();
+    assert.equal(model.page, 2);
+  });
+  await t.test('确认寻回明细使用独立窗口，翻页继续携带确认日期而非发布日期', async () => {
+    const { model, pending } = modelFixture();
+    const window = { start: '2026-01-03', end: '2026-01-03' };
+    model.category = '证件卡片';
+    model.status = 'resolved';
+    model.resolutionWindow = window;
+    const first = model.load();
+    assert.deepEqual(pending[0].args.slice(0, 5), ['all', '证件卡片', '', '', 'resolved']);
+    assert.equal(pending[0].args[8], undefined);
+    assert.equal(pending[0].args[9], window);
+    pending[0].resolve({ ...result('first'), total: 3, hasMore: true });
+    await first;
+    model.turn(1);
+    assert.equal(pending[1].args[7], 2);
+    assert.equal(pending[1].args[8], undefined);
+    assert.equal(pending[1].args[9], window);
     pending[1].resolve({ ...result('last', 2), total: 3 });
     await flush();
     assert.equal(model.page, 2);
@@ -161,5 +185,18 @@ test('原生管理API：状态参数与舍弃响应契约', async t => {
     assert.deepEqual(JSON.parse(last.options.extraData), { requestId: 'draft-token', updatedAt: '2026-01-01T00:00:00.000Z' });
     payload = { exists: true, input: { title: '', location: '', description: '', contact: '', occurredAt: '', kind: 'lost', category: '证件卡片', requestId: 'new' }, updatedAt: '2026-01-01T00:00:00.000Z' };
     await assert.rejects(() => Api.discardDraft('draft-token', '2026-01-01T00:00:00.000Z'), /格式异常/); assert.equal(destroys, 4);
+  });
+  await t.test('实际Api将确认寻回窗口映射到resolvedFrom与resolvedTo', async () => {
+    payload = { items: [], total: 0, page: 1, pageSize: 6, hasMore: false };
+    const before = destroys;
+    const window = { start: '2026-01-03', end: '2026-01-03' };
+    await Api.list('all', '证件卡片', '', '', 'resolved', 'latest', false, 1, undefined, window);
+    const target = new URL(last.url);
+    assert.equal(target.searchParams.get('status'), 'resolved');
+    assert.equal(target.searchParams.get('category'), '证件卡片');
+    assert.equal(target.searchParams.get('resolvedFrom'), window.start);
+    assert.equal(target.searchParams.get('resolvedTo'), window.end);
+    assert.equal(target.searchParams.has('publishedFrom'), false);
+    assert.equal(destroys, before + 1);
   });
 });

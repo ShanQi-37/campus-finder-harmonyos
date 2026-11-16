@@ -54,17 +54,22 @@ export class ResponseGuard {
     return Array.isArray(points) && points.every((point: CountPoint) => !!point && typeof point.label === 'string' && ResponseGuard.count(point.count));
   }
   static statistics(data: Statistics): boolean {
-    if (!data || ![data.total, data.open, data.resolved, data.lost, data.found, data.withdrawn, data.pendingClaims, data.recoveryRate].every((value: number) => ResponseGuard.count(value)) ||
+    if (!data || ![data.total, data.open, data.resolved, data.lost, data.found, data.withdrawn, data.pendingClaims, data.recoveryRate, data.undatedResolved].every((value: number) => ResponseGuard.count(value)) ||
       ![7, 14, 30].includes(data.days) || (data.category !== 'all' && !CATEGORIES.includes(data.category)) || !ResponseGuard.time(data.updatedAt) ||
       !['today', 'latest'].includes(data.anchor) || !ResponseGuard.date(data.windowStart) || !ResponseGuard.date(data.windowEnd) ||
-      !ResponseGuard.points(data.categories) || !ResponseGuard.points(data.trend)) { return false; }
+      !ResponseGuard.date(data.recoveryWindowStart) || !ResponseGuard.date(data.recoveryWindowEnd) ||
+      !ResponseGuard.points(data.categories) || !ResponseGuard.points(data.trend) || !ResponseGuard.points(data.recoveryTrend)) { return false; }
     const start = Date.parse(data.windowStart);
+    const recoveryStart = Date.parse(data.recoveryWindowStart);
     const dayMs = 86400000;
     return data.total === data.open + data.resolved && data.total === data.lost + data.found &&
       Date.parse(data.windowEnd) - start === (data.days - 1) * dayMs &&
+      Date.parse(data.recoveryWindowEnd) - recoveryStart === (data.days - 1) * dayMs &&
       data.categories.length === CATEGORIES.length && data.categories.every((point: CountPoint, index: number) => point.label === CATEGORIES[index]) &&
       data.trend.length === data.days && data.trend.every((point: TrendPoint, index: number) =>
         point.label === new Date(start + index * dayMs).toISOString().slice(5, 10) && ResponseGuard.count(point.resolved) && point.resolved <= point.count) &&
+      data.recoveryTrend.length === data.days && data.recoveryTrend.every((point: CountPoint, index: number) =>
+        point.label === new Date(recoveryStart + index * dayMs).toISOString().slice(5, 10)) &&
       data.categories.reduce((sum: number, point: CountPoint) => sum + point.count, 0) === data.total &&
       data.trend.reduce((sum: number, point: TrendPoint) => sum + point.count, 0) === data.total &&
       data.trend.reduce((sum: number, point: TrendPoint) => sum + point.resolved, 0) === data.resolved &&

@@ -124,19 +124,19 @@ export struct ClaimCenterPage {
       Row({ space: 7 }) {
         Select(this.statusOptions).selected(this.statuses.indexOf(this.claimStatus))
           .value(this.statusOptions[this.statuses.indexOf(this.claimStatus)].value as string)
-          .font({ size: 13 }).height(42).backgroundColor(Colors.surface).width(118).accessibilityText('申请状态筛选')
+          .font({ size: 13 }).constraintSize({ minHeight: 42 }).backgroundColor(Colors.surface).width(118).accessibilityText('申请状态筛选')
           .onSelect((index: number) => this.selectStatus(this.statuses[index]))
         Text(this.phase === 'loading' ? '正在同步…' :
           (this.phase === 'error' ? '同步失败' : this.claims.length + ' 条记录'))
           .fontSize(12).fontColor(Colors.muted).layoutWeight(1)
-        Button('刷新').height(42).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
+        Button('刷新').constraintSize({ minHeight: 42 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
           .onClick(() => { this.load(); })
       }.width('100%')
       if (this.resultStatus.length) {
         Row({ space: 7 }) {
           Text(this.resultLabel()).fontSize(13).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
           if (this.claimStatus !== 'all' && this.claimStatus !== this.resultStatus) {
-            Button('查看结果').height(36).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
+            Button('查看结果').constraintSize({ minHeight: 36 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
               .onClick(() => this.selectStatus(this.resultStatus))
           }
         }.width('100%').padding(9).backgroundColor(Colors.soft).borderRadius(12)
@@ -178,19 +178,19 @@ export struct ClaimCenterPage {
           new Date(claim.status === 'pending' ? claim.createdAt : claim.updatedAt)
             .toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }))
           .fontSize(11).fontColor(Colors.muted).layoutWeight(1)
-        Button('查看启事 ›').height(36).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
+        Button('查看启事 ›').constraintSize({ minHeight: 36 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
           .onClick(() => { this.stack.pushPath({ name: 'Detail', param: claim.itemId }); })
       }.width('100%')
       if (claim.status === 'pending') {
         if (this.boxDirection === 'received') {
           Row({ space: 8 }) {
-            Button('不通过').height(43).fontSize(13).fontColor(Colors.red).backgroundColor('#FAEBE7')
+            Button('不通过').constraintSize({ minHeight: 43 }).fontSize(13).fontColor(Colors.red).backgroundColor('#FAEBE7')
               .layoutWeight(1).onClick(() => this.confirm(claim, 'reject'))
-            Button('确认寻回').height(43).fontSize(13).fontWeight(FontWeight.Bold).backgroundColor(Colors.green)
+            Button('确认寻回').constraintSize({ minHeight: 43 }).fontSize(13).fontWeight(FontWeight.Bold).backgroundColor(Colors.green)
               .layoutWeight(2).onClick(() => this.confirm(claim, 'accept'))
           }.width('100%')
         } else {
-          Button('取消申请').height(42).width('100%').fontSize(13).fontColor(Colors.red)
+          Button('取消申请').constraintSize({ minHeight: 42 }).width('100%').fontSize(13).fontColor(Colors.red)
             .backgroundColor('#FAEBE7').onClick(() => this.confirm(claim, 'cancel'))
         }
       }

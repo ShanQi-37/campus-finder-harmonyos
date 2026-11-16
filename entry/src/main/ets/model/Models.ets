@@ -7,13 +7,14 @@ export interface Item {
 }
 export interface ItemList { items: Item[]; total: number; page: number; pageSize: number; hasMore: boolean; }
 export interface PublicationWindow { start: string; end: string; }
-export interface StatisticsScope { window: PublicationWindow; category: string; status: string; }
+export interface StatisticsScope { window: PublicationWindow; category: string; status: string; dateType: string; }
 export interface CountPoint { label: string; count: number; }
 export interface TrendPoint extends CountPoint { resolved: number; }
 export interface Statistics {
   total: number; resolved: number; open: number; recoveryRate: number; lost: number; found: number;
-  withdrawn: number; pendingClaims: number; categories: CountPoint[]; trend: TrendPoint[]; days: number; category: string;
-  anchor: string; windowStart: string; windowEnd: string; updatedAt: string;
+  withdrawn: number; pendingClaims: number; categories: CountPoint[]; trend: TrendPoint[]; recoveryTrend: CountPoint[];
+  undatedResolved: number; days: number; category: string;
+  anchor: string; windowStart: string; windowEnd: string; recoveryWindowStart: string; recoveryWindowEnd: string; updatedAt: string;
 }
 export interface PublishInput { title: string; category: string; kind: string; location: string; description: string; contact: string; occurredAt: string; requestId: string; }
 export interface ClaimInput { proof: string; contact: string; }
@@ -32,4 +33,4 @@ export const CATEGORIES: string[] = ['证件卡片', '电子数码', '生活用�
 export const CATEGORY_OPTIONS: SelectOption[] = [{ value: '全部分类' }, { value: '证件卡片' }, { value: '电子数码' }, { value: '生活用品' }, { value: '学习文具' }];
 export const STATUS_OPTIONS: SelectOption[] = [{ value: '全部状态' }, { value: '待寻回' }, { value: '已寻回' }];
 export function emptyItem(): Item { return { id: '', title: '', category: '证件卡片', kind: 'lost', location: '', description: '', owner: '', ownerName: '', status: 'open', contact: '', contactVisible: false, occurredAt: '', createdAt: '', updatedAt: '', resolvedAt: '', saved: false, myPending: false, claimCount: 0, history: [] }; }
-export function emptyStatistics(): Statistics { return { total: 0, resolved: 0, open: 0, recoveryRate: 0, lost: 0, found: 0, withdrawn: 0, pendingClaims: 0, categories: [], trend: [], days: 7, category: 'all', anchor: 'today', windowStart: '', windowEnd: '', updatedAt: '' }; }
+export function emptyStatistics(): Statistics { return { total: 0, resolved: 0, open: 0, recoveryRate: 0, lost: 0, found: 0, withdrawn: 0, pendingClaims: 0, categories: [], trend: [], recoveryTrend: [], undatedResolved: 0, days: 7, category: 'all', anchor: 'today', windowStart: '', windowEnd: '', recoveryWindowStart: '', recoveryWindowEnd: '', updatedAt: '' }; }

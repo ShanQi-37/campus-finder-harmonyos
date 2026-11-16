@@ -28,6 +28,8 @@ export struct CategoryChart {
 export struct TrendChart {
   @Param points: TrendPoint[] = [];
   @Param selectedDay: number = 0;
+  @Param recovery: boolean = false;
+  @Param undatedResolved: number = 0;
   @Event onSelectDay: (day: number) => void = () => {};
   @Event onBrowseDay: (index: number) => void = () => {};
   @Local chartWidth: number = 270;
@@ -57,23 +59,34 @@ export struct TrendChart {
   }
   build() {
     Column({ space: 14 }) {
-      Row() { Text(this.points.length + '日发布与寻回').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink); Blank(); Text('单位：条').fontSize(11).fontColor(Colors.muted) }.width('100%')
-      Row({ space: 14 }) {
-        Text('━ 有效启事 ' + this.points.reduce((sum: number, point: TrendPoint) => sum + point.count, 0)).fontSize(11).fontColor('#31654C')
-        Text('━ 其中已寻回 ' + this.points.reduce((sum: number, point: TrendPoint) => sum + point.resolved, 0)).fontSize(11).fontColor('#8D5917')
+      Row() {
+        Text(this.recovery ? this.points.length + '日确认寻回' : this.points.length + '日发布与寻回')
+          .fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
+        Text('单位：条').fontSize(11).fontColor(Colors.muted)
       }.width('100%')
+      Column({ space: 4 }) {
+        Text((this.recovery ? '━ 实际确认寻回 ' : '━ 有效启事 ') +
+          this.points.reduce((sum: number, point: TrendPoint) => sum + point.count, 0)).fontSize(11).fontColor('#31654C')
+        if (!this.recovery) {
+          Text('━ 其中已寻回 ' + this.points.reduce((sum: number, point: TrendPoint) => sum + point.resolved, 0)).fontSize(11).fontColor('#8D5917')
+        }
+      }.width('100%').alignItems(HorizontalAlign.Start)
       Stack({ alignContent: Alignment.TopStart }) {
         Column() { Divider().color('#EFF2EA'); Blank(); Divider().color('#EFF2EA'); Blank(); Divider().color('#D5DECE') }.height(90).width('100%').position({ x: 0, y: 20 })
         if (this.points.length > 0) {
           Divider().vertical(true).height(90).color('#C4D4C5').position({ x: this.dateX(this.dayIndex()), y: 20 })
         }
         Polyline().points(this.coordinates(false)).stroke('#447C60').strokeWidth(4).fillOpacity(0).width('100%').height(120)
-        Polyline().points(this.coordinates(true)).stroke('#B57C2B').strokeWidth(2).fillOpacity(0).width('100%').height(120)
+        if (!this.recovery) {
+          Polyline().points(this.coordinates(true)).stroke('#B57C2B').strokeWidth(2).fillOpacity(0).width('100%').height(120)
+        }
         if (this.points.length > 0) {
           Circle().width(10).height(10).fill('#447C60')
             .position({ x: this.dateX(this.dayIndex()) - 5, y: this.countY(this.points[this.dayIndex()].count, this.maxCount()) - 5 })
-          Circle().width(5).height(5).fill('#B57C2B')
-            .position({ x: this.dateX(this.dayIndex()) - 2.5, y: this.countY(this.points[this.dayIndex()].resolved, this.maxCount()) - 2.5 })
+          if (!this.recovery) {
+            Circle().width(5).height(5).fill('#B57C2B')
+              .position({ x: this.dateX(this.dayIndex()) - 2.5, y: this.countY(this.points[this.dayIndex()].resolved, this.maxCount()) - 2.5 })
+          }
         }
         Text(this.maxCount().toString()).fontSize(9).fontColor(Colors.muted).position({ x: 0, y: 15 })
         Text('0').fontSize(9).fontColor(Colors.muted).position({ x: 0, y: 103 })
@@ -91,23 +104,32 @@ export struct TrendChart {
       }.width('100%').height(16)
       if (this.points.length > 0) {
         Column({ space: 5 }) {
-          Row({ space: 4 }) {
-            Text(this.points[this.dayIndex()].label + ' 发布').fontSize(14).fontWeight(FontWeight.Bold)
-              .fontColor(Colors.ink).layoutWeight(1)
-            Button('查看当日启事 ›').height(36).fontSize(11).fontColor(Colors.green).backgroundColor(Colors.surface)
+          Column({ space: 6 }) {
+            Text(this.points[this.dayIndex()].label + (this.recovery ? ' 确认寻回' : ' 发布')).fontSize(14).fontWeight(FontWeight.Bold)
+              .fontColor(Colors.ink).width('100%')
+            Button('查看当日启事 ›').constraintSize({ minHeight: 40 }).width('100%').fontSize(12)
+              .fontColor(Colors.green).backgroundColor(Colors.surface)
               .enabled(this.points[this.dayIndex()].count > 0).onClick(() => this.onBrowseDay(this.dayIndex()))
           }.width('100%')
-          Text('有效启事 ' + this.points[this.dayIndex()].count + ' 条 · 其中已寻回 ' +
-            this.points[this.dayIndex()].resolved + ' 条').fontSize(12).fontColor(Colors.ink).width('100%')
+          Text(this.recovery ? '实际确认寻回 ' + this.points[this.dayIndex()].count + ' 条' :
+            '有效启事 ' + this.points[this.dayIndex()].count + ' 条 · 其中已寻回 ' + this.points[this.dayIndex()].resolved + ' 条')
+            .fontSize(12).fontColor(Colors.ink).width('100%')
           if (this.points.length > 1) {
             Slider({ value: this.dayIndex() + 1, min: 1, max: this.points.length, step: 1 })
               .selectedColor('#447C60').width('100%').height(44)
-              .accessibilityText('选择发布日期').accessibilityDescription(this.points[this.dayIndex()].label)
+              .accessibilityText(this.recovery ? '选择确认寻回日期' : '选择发布日期').accessibilityDescription(this.points[this.dayIndex()].label)
               .onChange((value: number) => this.onSelectDay(Math.round(value)))
           }
         }.width('100%').backgroundColor('#F1F5EF').borderRadius(12).padding({ left: 12, right: 12, top: 8, bottom: 3 })
       }
-      Text('横轴为发布日期。已寻回按启事当前状态统计。').fontSize(11).fontColor(Colors.muted).width('100%')
+      Text(this.recovery ? '横轴为发布者实际确认寻回的上海日期。' : '横轴为发布日期。已寻回按启事当前状态统计。')
+        .fontSize(11).fontColor(Colors.muted).width('100%')
+      if (this.recovery) {
+        Text(this.undatedResolved > 0 ?
+          '另有 ' + this.undatedResolved + ' 条已寻回旧记录缺少可靠确认日期，仍计入寻回总览，不计入本趋势与单日明细。' :
+          '仅统计具有可靠确认时间或交接动态的记录。')
+          .fontSize(11).fontColor(this.undatedResolved > 0 ? '#8D5917' : Colors.muted).lineHeight(17).width('100%')
+      }
     }.width('100%').padding(16).backgroundColor(Colors.surface).borderRadius(16)
       .border({ width: 1, color: Colors.stroke })
   }

@@ -37,7 +37,7 @@ export struct PageHeader {
         if (this.subtitle.length) { Text(this.subtitle).fontSize(11).fontColor(Colors.muted).maxLines(1) }
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Image($r('app.media.app_icon')).width(38).height(38).borderRadius(12).accessibilityLevel('no')
-    }.width('100%').height(62).padding({ left: 16, right: 16, top: 5, bottom: 5 })
+    }.width('100%').constraintSize({ minHeight: 62 }).padding({ left: 16, right: 16, top: 5, bottom: 5 })
   }
 }
 @ComponentV2
@@ -48,7 +48,7 @@ export struct ChoiceChip {
   build() {
     Button(this.label).fontSize(12).fontWeight(this.selected ? FontWeight.Bold : FontWeight.Normal)
       .fontColor(this.selected ? '#FFFFFF' : Colors.muted).backgroundColor(this.selected ? Colors.green : '#FFFFFF')
-      .height(32).padding({ left: 12, right: 12 }).borderRadius(10).onClick(() => this.onSelect())
+      .constraintSize({ minHeight: 32 }).padding({ left: 12, right: 12 }).borderRadius(10).onClick(() => this.onSelect())
       .accessibilitySelected(this.selected)
   }
 }
@@ -58,7 +58,7 @@ export struct SegmentTab {
   @Param selected: boolean = false;
   @Event onSelect: () => void = () => {};
   build() {
-    Button(this.label).width('100%').height(40).padding({ left: 3, right: 3 })
+    Button(this.label).width('100%').constraintSize({ minHeight: 40 }).padding({ left: 3, right: 3, top: 8, bottom: 8 })
       .fontSize(13).fontWeight(this.selected ? FontWeight.Bold : FontWeight.Medium)
       .fontColor(this.selected ? Colors.green : Colors.muted)
       .backgroundColor(this.selected ? Colors.surface : '#00000000').borderRadius(10)
@@ -85,7 +85,7 @@ export struct StatePanel {
           Text(this.error).fontSize(12).maxLines(3).fontColor(Colors.muted).textAlign(TextAlign.Center)
             .padding({ left: 22, right: 22 })
         }
-        Button(this.phase === 'error' ? '重新加载' : this.emptyAction).height(42).fontSize(13)
+        Button(this.phase === 'error' ? '重新加载' : this.emptyAction).constraintSize({ minHeight: 42 }).fontSize(13)
           .fontColor('#FFFFFF').backgroundColor(Colors.green).onClick(() => this.onRetry())
       }
     }.width('100%').padding({ top: 16, bottom: 16 }).justifyContent(FlexAlign.Center)
@@ -111,8 +111,12 @@ export struct NoticeStatus {
 export struct ItemCard {
   @Param item: Item = emptyItem();
   @Param showPublishedDate: boolean = false;
+  @Param showResolvedDate: boolean = false;
   @Event onOpen: (id: string) => void = () => {};
   itemDate(): string {
+    if (this.showResolvedDate && this.item.resolvedAt.length) {
+      return new Date(this.item.resolvedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }).slice(5) + ' 确认寻回';
+    }
     if (this.showPublishedDate) {
       return new Date(this.item.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }).slice(5) + ' 发布';
     }

@@ -99,7 +99,7 @@ export struct ClaimFormPage {
           Text('核对说明').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
           Text(this.proof.length + ' / 240 字').fontSize(11).fontColor(Colors.muted)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button('填入虚构示例').height(38).fontSize(12).fontColor(Colors.green)
+        Button('填入虚构示例').constraintSize({ minHeight: 38 }).fontSize(12).fontColor(Colors.green)
           .backgroundColor(Colors.soft).onClick(() => this.offerExample())
       }.width('100%')
       TextArea({ text: this.proof, placeholder: this.item.kind === 'found'
@@ -111,8 +111,8 @@ export struct ClaimFormPage {
         Text('联系指引').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
         Text('仅申请双方可见').fontSize(11).fontColor(Colors.muted)
       }.width('100%')
-      TextInput({ text: this.contact, placeholder: '例如：校园服务台留言' }).height(46).fontSize(14)
-        .maxLength(60).backgroundColor(Colors.paper).borderRadius(10)
+      TextInput({ text: this.contact, placeholder: '例如：校园服务台留言' }).constraintSize({ minHeight: 46 }).fontSize(14)
+        .maxLength(60).backgroundColor(Colors.paper).borderRadius(10).enterKeyType(EnterKeyType.Done)
         .border({ width: 1, color: this.issue === 'contact' ? Colors.red : Colors.stroke })
         .accessibilityText('联系指引').onChange((value: string) => { this.contact = value; this.clearIssue('contact'); })
     }.width('100%').padding(14).backgroundColor(Colors.surface).borderRadius(15)
@@ -141,7 +141,7 @@ export struct ClaimFormPage {
           Column({ space: 7 }) {
             if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('100%') }
             Button(this.busy ? '正在提交…' : (this.item.kind === 'found' ? '提交认领申请' : '提交寻物线索'))
-              .height(46).fontSize(14).fontWeight(FontWeight.Bold).width('100%').backgroundColor(Colors.green)
+              .constraintSize({ minHeight: 46 }).fontSize(14).fontWeight(FontWeight.Bold).width('100%').backgroundColor(Colors.green)
               .enabled(!this.busy).onClick(() => { this.submit(); })
           }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 }).backgroundColor(Colors.surface)
             .border({ width: { top: 1 }, color: Colors.stroke })

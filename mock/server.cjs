@@ -34,22 +34,37 @@ const ACTORS = ['demo-user', 'peer-01', 'peer-02'];
 const names = { 'demo-user': '校园体验同学', 'peer-01': '互助体验同学', 'peer-02': '志愿体验同学' };
 const now = () => new Date().toISOString();
 const event = (label, at = now()) => ({ label, at });
+const RESOLUTION_EVENTS = new Set(['发布者确认寻回', '核对申请通过，确认完成交接']);
+const validTime = value => typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+function reliableResolvedAt(item) {
+  if (item.status !== 'resolved') return '';
+  const history = Array.isArray(item.history) ? item.history : [];
+  const confirmation = history.filter(entry => entry && RESOLUTION_EVENTS.has(entry.label) && validTime(entry.at)).at(-1);
+  if (confirmation) return confirmation.at;
+  const candidate = validTime(item.resolvedAt) ? item.resolvedAt : '';
+  // Older normalization copied createdAt into resolvedAt. Without a confirmation event that
+  // value is only a placeholder, not evidence of the actual handover date.
+  return candidate && candidate !== item.createdAt ? candidate : '';
+}
 const fingerprint = input => createHash('sha256').update(JSON.stringify(['title', 'location', 'description', 'contact', 'kind', 'category', 'occurredAt'].map(key => input[key]))).digest('hex');
 function normalize(item) {
-  return { ...item, owner: ACTORS.includes(item.owner) ? item.owner : 'peer-01',
-    updatedAt: item.updatedAt || item.createdAt, resolvedAt: item.resolvedAt || (item.status === 'resolved' ? item.createdAt : ''),
-    requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
+  const normalized = { ...item, owner: ACTORS.includes(item.owner) ? item.owner : 'peer-01',
+    updatedAt: item.updatedAt || item.createdAt, requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
+  return { ...normalized, resolvedAt: reliableResolvedAt({ ...normalized, resolvedAt: item.resolvedAt }) };
 }
 function aggregate(items, claims = [], days = 7, category = 'all', reference = new Date(), anchor = 'today') {
   const today = dateKey(reference);
-  const dated = items.filter(i => category === 'all' || i.category === category)
-    .map(item => ({ item, day: dateKey(new Date(item.createdAt)) }));
+  const categorized = items.filter(i => category === 'all' || i.category === category);
+  const dated = categorized.map(item => ({ item, day: dateKey(new Date(item.createdAt)) }));
   const latest = anchor === 'latest' ? dated.reduce((end, { item, day }) =>
     item.status !== 'withdrawn' && day <= today && day > end ? day : end, '') : '';
   const windowEnd = latest || today;
-  const endTime = Date.parse(windowEnd);
-  const dates = Array.from({ length: days }, (_, index) =>
-    new Date(endTime - (days - 1 - index) * 86400000).toISOString().slice(0, 10));
+  const datesFor = end => {
+    const endTime = Date.parse(end);
+    return Array.from({ length: days }, (_, index) =>
+      new Date(endTime - (days - 1 - index) * 86400000).toISOString().slice(0, 10));
+  };
+  const dates = datesFor(windowEnd);
   const windowStart = dates[0];
   const scoped = dated.filter(({ day }) => day >= windowStart && day <= windowEnd).map(({ item }) => item);
   const active = scoped.filter(i => i.status !== 'withdrawn');
@@ -61,12 +76,26 @@ function aggregate(items, claims = [], days = 7, category = 'all', reference = n
       if (item.status === 'resolved') point.resolved++;
     }
   }
+  const confirmations = categorized.map(item => ({ item, at: reliableResolvedAt(item) })).filter(({ at }) => at)
+    .map(({ item, at }) => ({ item, day: dateKey(new Date(at)) }));
+  const latestRecovery = anchor === 'latest' ? confirmations.reduce((end, { day }) =>
+    day <= today && day > end ? day : end, '') : '';
+  const recoveryWindowEnd = latestRecovery || today;
+  const recoveryDates = datesFor(recoveryWindowEnd);
+  const recoveryDaily = new Map(recoveryDates.map(day => [day, { label: day.slice(5), count: 0 }]));
+  for (const { day } of confirmations) {
+    const point = recoveryDaily.get(day);
+    if (point) point.count++;
+  }
   const total = active.length, resolved = active.filter(i => i.status === 'resolved').length;
   return { total, resolved, open: total - resolved, recoveryRate: total ? Math.round(resolved / total * 100) : 0,
     lost: active.filter(i => i.kind === 'lost').length, found: active.filter(i => i.kind === 'found').length,
     withdrawn: scoped.length - total, pendingClaims: claims.filter(c => c.status === 'pending' && active.some(i => i.id === c.itemId)).length,
     categories: CATEGORIES.map(label => ({ label, count: active.filter(i => i.category === label).length })),
-    trend: [...daily.values()], days, category, anchor, windowStart, windowEnd, updatedAt: reference.toISOString() };
+    trend: [...daily.values()], recoveryTrend: [...recoveryDaily.values()],
+    undatedResolved: categorized.filter(item => item.status === 'resolved' && !reliableResolvedAt(item)).length,
+    days, category, anchor, windowStart, windowEnd,
+    recoveryWindowStart: recoveryDates[0], recoveryWindowEnd, updatedAt: reference.toISOString() };
 }
 function createApp(options = {}) {
   const file = options.file || path.join(__dirname, 'runtime', 'items.json');
@@ -198,6 +227,20 @@ function createApp(options = {}) {
             return published >= from && published <= to;
           });
         }
+        const resolvedFrom = url.searchParams.get('resolvedFrom');
+        const resolvedTo = url.searchParams.get('resolvedTo');
+        if (resolvedFrom !== null || resolvedTo !== null) {
+          if (!isDateKey(resolvedFrom) || !isDateKey(resolvedTo) || resolvedFrom > resolvedTo || resolvedTo > dateKey()) {
+            return reply(res, 400, null, '确认寻回日期范围无效');
+          }
+          if (url.searchParams.get('status') !== 'resolved') return reply(res, 400, null, '确认寻回日期明细需指定已寻回状态');
+          result = result.filter(item => {
+            const resolvedAt = reliableResolvedAt(item);
+            if (!resolvedAt) return false;
+            const resolved = dateKey(new Date(resolvedAt));
+            return resolved >= resolvedFrom && resolved <= resolvedTo;
+          });
+        }
         const keyword = (url.searchParams.get('keyword') || '').trim();
         if (keyword.length > 80) return reply(res, 400, null, '关键词最多80字');
         const terms = normalizeSearch(keyword).split(/\s+/u).filter(Boolean);
@@ -210,7 +253,8 @@ function createApp(options = {}) {
         const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 100);
         if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) return reply(res, 400, null, '分页参数无效');
         const direction = url.searchParams.get('sort') === 'oldest' ? 1 : -1;
-        const sorted = [...result].sort((a, b) => direction * a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+        const sortTime = item => resolvedFrom !== null ? reliableResolvedAt(item) : item.createdAt;
+        const sorted = [...result].sort((a, b) => direction * sortTime(a).localeCompare(sortTime(b)) || a.id.localeCompare(b.id));
         const current = Math.min(page, Math.max(1, Math.ceil(result.length / pageSize)));
         return reply(res, 200, { items: sorted.slice((current - 1) * pageSize, current * pageSize).map(view), total: result.length, page: current, pageSize, hasMore: current * pageSize < result.length });
       }
@@ -287,8 +331,9 @@ function createApp(options = {}) {
         if (!target) return reply(res, 404, null, '接口不存在');
         if (item.status === target) return reply(res, 200, view(item));
         if ((action === 'restore' && item.status !== 'withdrawn') || (action !== 'restore' && item.status !== 'open')) return reply(res, 409, null, '当前状态不支持此操作');
-        const updated = { ...item, status: target, updatedAt: now(), resolvedAt: target === 'resolved' ? now() : '', history: [...item.history, event({ resolve: '发布者确认寻回', withdraw: '发布者撤回启事', restore: '重新开放启事' }[action])] };
-        const claims = store.claims.map(c => c.itemId === id && c.status === 'pending' ? { ...c, status: 'cancelled', updatedAt: now() } : c);
+        const changedAt = now();
+        const updated = { ...item, status: target, updatedAt: changedAt, resolvedAt: target === 'resolved' ? changedAt : '', history: [...item.history, event({ resolve: '发布者确认寻回', withdraw: '发布者撤回启事', restore: '重新开放启事' }[action], changedAt)] };
+        const claims = store.claims.map(c => c.itemId === id && c.status === 'pending' ? { ...c, status: 'cancelled', updatedAt: changedAt } : c);
         commit({ ...store, items: store.items.map(i => i.id === id ? updated : i), claims }); return reply(res, 200, view(updated));
       }
       const claimMatch = url.pathname.match(/^\/api\/claims\/([^/]+)\/(accept|reject|cancel)$/);
@@ -303,9 +348,10 @@ function createApp(options = {}) {
         if (claim.status !== 'pending') return reply(res, 409, null, '申请已处理，请刷新查看');
         const item = store.items.find(i => i.id === claim.itemId);
         if (item.status !== 'open') return reply(res, 409, null, '启事已结束');
-        const updated = { ...claim, status: target, updatedAt: now() };
-        const claims = store.claims.map(c => c.id === id ? updated : action === 'accept' && c.itemId === item.id && c.status === 'pending' ? { ...c, status: 'rejected', updatedAt: now() } : c);
-        const items = action === 'accept' ? store.items.map(i => i.id === item.id ? { ...i, status: 'resolved', updatedAt: now(), resolvedAt: now(), history: [...i.history, event('核对申请通过，确认完成交接')] } : i) : store.items;
+        const changedAt = now();
+        const updated = { ...claim, status: target, updatedAt: changedAt };
+        const claims = store.claims.map(c => c.id === id ? updated : action === 'accept' && c.itemId === item.id && c.status === 'pending' ? { ...c, status: 'rejected', updatedAt: changedAt } : c);
+        const items = action === 'accept' ? store.items.map(i => i.id === item.id ? { ...i, status: 'resolved', updatedAt: changedAt, resolvedAt: changedAt, history: [...i.history, event('核对申请通过，确认完成交接', changedAt)] } : i) : store.items;
         commit({ ...store, items, claims }); return reply(res, 200, claimView(updated));
       }
       return reply(res, 404, null, '接口不存在');

@@ -1,4 +1,4 @@
-import { CATEGORY_OPTIONS, CATEGORIES, Statistics, StatisticsScope, emptyStatistics } from '../model/Models';
+import { CATEGORY_OPTIONS, CATEGORIES, CountPoint, Statistics, StatisticsScope, TrendPoint, emptyStatistics } from '../model/Models';
 import { Api } from '../service/Api';
 import { Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
 import { BottomNav } from '../components/BottomNav';
@@ -17,10 +17,18 @@ export struct StatisticsPage {
   private generation: number = 0;
   async load(): Promise<void> {
     const ticket = ++this.generation; this.phase = 'loading';
-    try { const data = await Api.statistics(this.days, this.category, this.anchor); if (ticket !== this.generation) { return; } this.data = data; this.phase = data.total ? 'ready' : 'empty'; }
+    try { const data = await Api.statistics(this.days, this.category, this.anchor); if (ticket !== this.generation) { return; } this.data = data;
+      const recoveries = data.recoveryTrend.reduce((sum: number, point: CountPoint) => sum + point.count, 0);
+      this.phase = data.total > 0 || recoveries > 0 ? 'ready' : 'empty'; }
     catch (error) { if (ticket !== this.generation) { return; } this.error = (error as Error).message; this.phase = 'error'; }
   }
   aboutToDisappear(): void { this.generation++; }
+  recoveryPoints(): TrendPoint[] {
+    return this.data.recoveryTrend.map((point: CountPoint) => {
+      const trend: TrendPoint = { label: point.label, count: point.count, resolved: 0 };
+      return trend;
+    });
+  }
   selectAnchor(anchor: string): void {
     if (this.anchor === anchor) { return; }
     this.anchor = anchor;
@@ -48,17 +56,21 @@ export struct StatisticsPage {
     else if (route === 'Publish') { this.stack.pushPath({ name: 'Publish', param: '' }); }
     else { this.stack.replacePath({ name: route, param: '' }); }
   }
-  openItems(status: string, index: number = -1): void {
+  openItems(status: string, index: number = -1, dateType: string = 'published'): void {
     if (this.phase !== 'ready') { return; }
-    let start = this.data.windowStart;
-    let end = this.data.windowEnd;
+    const recovery = dateType === 'resolved';
+    let start = recovery ? this.data.recoveryWindowStart : this.data.windowStart;
+    let end = recovery ? this.data.recoveryWindowEnd : this.data.windowEnd;
     if (index >= 0) {
-      if (index >= this.data.trend.length || !this.data.trend[index].count) { return; }
-      // The window contains consecutive calendar dates. UTC arithmetic avoids a local day shift.
+      const count = recovery ?
+        (index < this.data.recoveryTrend.length ? this.data.recoveryTrend[index].count : 0) :
+        (index < this.data.trend.length ? this.data.trend[index].count : 0);
+      if (!count) { return; }
+      // Each window contains consecutive calendar dates. UTC arithmetic avoids a local day shift.
       start = new Date(Date.parse(start) + index * 86400000).toISOString().slice(0, 10);
       end = start;
     }
-    const scope: StatisticsScope = { window: { start: start, end: end }, category: this.data.category, status: status };
+    const scope: StatisticsScope = { window: { start: start, end: end }, category: this.data.category, status: status, dateType: dateType };
     this.stack.pushPath({ name: 'StatisticsItems', param: scope });
   }
   @Builder
@@ -80,21 +92,21 @@ export struct StatisticsPage {
         SegmentTab({ label: '最近有记录', selected: this.anchor === 'latest',
           onSelect: () => this.selectAnchor('latest') }).layoutWeight(1)
       }.width('100%').padding(3).borderRadius(13).backgroundColor(Colors.soft)
-      Row({ space: 5 }) {
-        Row({ space: 3 }) {
-          ForEach([7, 14, 30], (days: number) => {
-            SegmentTab({ label: days + '日', selected: this.days === days,
-              onSelect: () => this.selectDays(days) }).layoutWeight(1)
-          }, (days: number) => days.toString())
-        }.layoutWeight(3).padding(2).borderRadius(12).backgroundColor(Colors.soft)
+      Row({ space: 3 }) {
+        ForEach([7, 14, 30], (days: number) => {
+          SegmentTab({ label: days + '日', selected: this.days === days,
+            onSelect: () => this.selectDays(days) }).layoutWeight(1)
+        }, (days: number) => days.toString())
+      }.width('100%').padding(2).borderRadius(12).backgroundColor(Colors.soft)
+      Row({ space: 8 }) {
         Select(CATEGORY_OPTIONS).value(this.category === 'all' ? '全部分类' : this.category)
-          .selected(CATEGORIES.indexOf(this.category) + 1).font({ size: 12 }).height(42)
-          .layoutWeight(2).backgroundColor(Colors.surface).accessibilityText('统计类别')
+          .selected(CATEGORIES.indexOf(this.category) + 1).font({ size: 12 }).constraintSize({ minHeight: 42 })
+          .layoutWeight(1).backgroundColor(Colors.surface).accessibilityText('统计类别')
           .onSelect((index: number) => {
             const category = index === 0 ? 'all' : CATEGORIES[index - 1];
             if (category !== this.category) { this.category = category; this.selectedDay = 0; this.load(); }
           })
-        Button('↻').width(44).height(42).fontSize(20).fontColor(Colors.green).borderRadius(10)
+        Button('↻').width(44).constraintSize({ minHeight: 42 }).fontSize(20).fontColor(Colors.green).borderRadius(10)
           .backgroundColor(Colors.surface).accessibilityText('刷新统计').onClick(() => { this.load(); })
       }.width('100%')
     }.width('100%').padding({ left: 16, right: 16 })
@@ -110,20 +122,32 @@ export struct StatisticsPage {
         }.width('100%').height(65).columnsTemplate('1fr 1fr 1fr').rowsTemplate('1fr')
           .backgroundColor(Colors.surface).borderRadius(14).clip(true)
           .border({ width: 1, color: Colors.stroke })
-        Row({ space: 4 }) {
-          SegmentTab({ label: '寻回进度', selected: this.chart === 'overview',
-            onSelect: () => { this.chart = 'overview'; } }).layoutWeight(1)
-          SegmentTab({ label: '类别分布', selected: this.chart === 'category',
-            onSelect: () => { this.chart = 'category'; } }).layoutWeight(1)
-          SegmentTab({ label: '发布趋势', selected: this.chart === 'trend',
-            onSelect: () => { this.chart = 'trend'; } }).layoutWeight(1)
+        Column({ space: 4 }) {
+          Row({ space: 4 }) {
+            SegmentTab({ label: '寻回进度', selected: this.chart === 'overview',
+              onSelect: () => { this.chart = 'overview'; } }).layoutWeight(1)
+            SegmentTab({ label: '类别分布', selected: this.chart === 'category',
+              onSelect: () => { this.chart = 'category'; } }).layoutWeight(1)
+          }.width('100%')
+          Row({ space: 4 }) {
+            SegmentTab({ label: '发布趋势', selected: this.chart === 'trend',
+              onSelect: () => { this.chart = 'trend'; this.selectedDay = 0; } }).layoutWeight(1)
+            SegmentTab({ label: '寻回趋势', selected: this.chart === 'recovery',
+              onSelect: () => { this.chart = 'recovery'; this.selectedDay = 0; } }).layoutWeight(1)
+          }.width('100%')
         }.width('100%').backgroundColor(Colors.soft).padding(3).borderRadius(13)
         if (this.chart === 'overview') { RecoveryChart({ data: this.data }) }
         else if (this.chart === 'category') { CategoryChart({ points: this.data.categories }) }
-        else {
+        else if (this.chart === 'trend') {
           TrendChart({ points: this.data.trend, selectedDay: this.selectedDay,
             onSelectDay: (day: number) => { this.selectedDay = day; },
             onBrowseDay: (index: number) => this.openItems('all', index) })
+        }
+        else {
+          TrendChart({ points: this.recoveryPoints(), selectedDay: this.selectedDay, recovery: true,
+            undatedResolved: this.data.undatedResolved,
+            onSelectDay: (day: number) => { this.selectedDay = day; },
+            onBrowseDay: (index: number) => this.openItems('resolved', index, 'resolved') })
         }
         Column({ space: 6 }) {
           Text('寻物 ' + this.data.lost + ' 条 · 招领 ' + this.data.found + ' 条').fontSize(12).fontColor(Colors.ink)
@@ -140,7 +164,9 @@ export struct StatisticsPage {
         PageHeader({ title: '校园互助统计', subtitle: '启事发布与寻回数据', back: true, onBack: () => { this.stack.pop(); } })
         this.controls()
         if (this.phase === 'ready' || this.phase === 'empty') {
-          Text(this.data.windowStart + ' 至 ' + this.data.windowEnd + ' · 按发布日期')
+          Text(this.chart === 'recovery' ?
+            this.data.recoveryWindowStart + ' 至 ' + this.data.recoveryWindowEnd + ' · 按实际确认寻回日期' :
+            this.data.windowStart + ' 至 ' + this.data.windowEnd + ' · 按发布日期')
             .fontSize(11).fontColor(Colors.muted).width('100%').padding({ left: 16, right: 16 })
         }
         if (this.phase !== 'ready') {

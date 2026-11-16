@@ -28,12 +28,16 @@ export class Api {
     } finally { client.destroy(); }
   }
   static async list(kind: string, category: string, keyword: string, owner: string = '', status: string = 'all',
-    sort: string = 'latest', saved: boolean = false, page: number = 1, window?: PublicationWindow): Promise<ItemList> {
+    sort: string = 'latest', saved: boolean = false, page: number = 1, window?: PublicationWindow,
+    resolutionWindow?: PublicationWindow): Promise<ItemList> {
     let query = '/api/items?kind=' + encodeURIComponent(kind) + '&category=' + encodeURIComponent(category) +
       '&keyword=' + encodeURIComponent(keyword) + '&owner=' + encodeURIComponent(owner) +
       '&status=' + encodeURIComponent(status) + '&sort=' + sort + '&saved=' + saved + '&pageSize=6&page=' + page;
     if (window !== undefined) {
       query += '&publishedFrom=' + encodeURIComponent(window.start) + '&publishedTo=' + encodeURIComponent(window.end);
+    }
+    if (resolutionWindow !== undefined) {
+      query += '&resolvedFrom=' + encodeURIComponent(resolutionWindow.start) + '&resolvedTo=' + encodeURIComponent(resolutionWindow.end);
     }
     const data = await Api.request<ItemList>(query);
     if (!ResponseGuard.list(data)) { throw new Error('返回列表格式异常'); }

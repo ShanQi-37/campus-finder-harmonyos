@@ -28,7 +28,7 @@ export struct BottomNav {
       }.width(49).height(28).borderRadius(14).backgroundColor(this.active === route ? Colors.soft : '#00000000')
       Text(label).fontSize(11).fontWeight(this.active === route ? FontWeight.Bold : FontWeight.Medium)
         .fontColor(this.active === route ? Colors.green : Colors.muted)
-    }.layoutWeight(1).height(50).justifyContent(FlexAlign.Center).onClick(() => this.onNavigate(route))
+    }.layoutWeight(1).constraintSize({ minHeight: 50 }).justifyContent(FlexAlign.Center).onClick(() => this.onNavigate(route))
       .accessibilityText(label).accessibilitySelected(this.active === route)
   }
   build() {
@@ -38,7 +38,7 @@ export struct BottomNav {
       Row({ space: 2 }) {
         NavGlyph({ route: 'Publish', tint: '#FFFFFF' }).accessibilityLevel('no')
         Text('发布').fontSize(12).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-      }.layoutWeight(1).height(44).backgroundColor(Colors.green).borderRadius(14)
+      }.layoutWeight(1).constraintSize({ minHeight: 44 }).backgroundColor(Colors.green).borderRadius(14)
         .justifyContent(FlexAlign.Center).onClick(() => this.onNavigate('Publish')).accessibilityText('发布启事')
       this.tab('我的', 'My')
     }.width('100%').padding({ left: 12, right: 12, top: 5, bottom: 7 })

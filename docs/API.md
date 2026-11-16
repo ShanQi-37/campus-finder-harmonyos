@@ -24,7 +24,9 @@
 
 搜索词按空白分隔，每个词至少出现在一个可搜索字段，词序不影响结果。关键词与字段均统一全角、半角和字母大小写。创建时间相同的启事按 ID 排序，分页顺序固定。
 
-统计明细同时传递 `publishedFrom` 与 `publishedTo`。两个参数使用 `YYYY-MM-DD`，按 `createdAt` 的上海日期匹配并包含首尾。无效日期、反向区间和未来结束日期返回 400。日期条件可与类别和状态组合，分页在筛选后执行。统计明细使用公开列表的可见范围，已撤回启事不计入有效结果。
+发布日明细同时传递 `publishedFrom` 与 `publishedTo`。两个参数使用 `YYYY-MM-DD`，按 `createdAt` 的上海日期匹配并包含首尾。无效日期、反向区间和未来结束日期返回 400。日期条件可与类别和状态组合，分页在筛选后执行。统计明细使用公开列表的可见范围，已撤回启事不计入有效结果。
+
+确认寻回明细同时传递 `resolvedFrom`、`resolvedTo` 和 `status=resolved`。日期格式和区间校验与发布日明细一致；缺少任一日期、未指定已寻回状态均返回 400。结果只含具有可靠确认时间的记录，并按该时间执行 `sort=latest/oldest` 排序和分页，而不是按发布时间排序。
 
 发布/编辑字段：title2–36字、location2–30字、description8–300字、contact2–60字、kind、category、occurredAt（可选，默认今日，合法YYYY-MM-DD且不得晚于上海当日）、requestId（可选，提供时必须为1–80字非空字符串）。服务端生成UUID与createdAt。编辑保留id/owner/createdAt；已有待核对申请时禁止改变类型/分类，防止证据指向变化。其余线索可补充，核对时以当前启事为准。
 
@@ -34,9 +36,13 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 
 启事：open→resolved；open→withdrawn→open。已寻回不再编辑/撤回/恢复。申请：pending→accepted/rejected/cancelled。接受仅由启事所属身份执行，并在同一快照中将物品设resolved、当前申请accepted、其他pending设rejected；直接寻回或撤回将pending设cancelled。相同目标的重复处理返回原结果，冲突目标409。必须实际核实并交接后才在界面确认。
 
-统计按 `createdAt` 的上海日期筛选 7/14/30 日，返回包含首尾的 `windowStart` 和 `windowEnd`。默认 `anchor=today` 截至今天；`anchor=latest` 截至所选类别最近一条有效启事的发布日期，找不到有效记录时仍以今天为终点。两个模式都排除未来记录，`updatedAt` 始终是本次统计时间。
+发布统计按 `createdAt` 的上海日期筛选 7/14/30 日，返回包含首尾的 `windowStart` 和 `windowEnd`。默认 `anchor=today` 截至今天；`anchor=latest` 截至所选类别最近一条有效启事的发布日期，找不到有效记录时仍以今天为终点。两个模式都排除未来记录，`updatedAt` 始终是本次统计时间。
 
 已撤回启事独立计入 `withdrawn`，恢复后重新计入原发布日。`total = open + resolved = lost + found = sum(categories.count) = sum(trend.count)`；`sum(trend.resolved) = resolved`。`trend` 的每点含 `label`（月-日）、`count`（有效启事数）和 `resolved`（其中当前已寻回数）。确认寻回后会更新该启事**发布日**的寻回数量。`recoveryRate` 为四舍五入后的百分比，无数据为 0；`pendingClaims` 只计范围内有效启事的待核对申请。
+
+`recoveryTrend` 是独立的确认寻回曲线，每点含 `label` 和 `count`，窗口由 `recoveryWindowStart` 与 `recoveryWindowEnd` 包含首尾。`anchor=today` 与发布窗口一样截至今天；`anchor=latest` 单独寻找最近可靠确认日，因此较早发布、窗内才确认的记录仍可进入寻回曲线。可靠确认时间优先取最后一条有效的「发布者确认寻回」或「核对申请通过，确认完成交接」动态；没有此类动态时，只接受有效且不同于 `createdAt` 的显式 `resolvedAt`。两条确认路径写入相同的实际变更时间。
+
+旧版曾把缺失的 `resolvedAt` 补成 `createdAt`，所以这种相同值不被视为真实交接时间。缺少可靠时间的已寻回记录仍保留在既有总览中，但不进入 `recoveryTrend` 或确认日期明细；`undatedResolved` 返回当前类别下全部此类已寻回记录数，不限于当前发布窗口。
 
 存储 `mock/runtime/items.json`：`{version:2,items,claims,favorites,drafts}`。兼容旧数组，保留记录并映射旧的其他虚构身份至peer-01。每次完整快照写同目录临时文件→重命名→替换内存；任何写入失败500且内存不变。非对象JSON、异常ID编码、超大请求均拒绝。单进程中读改写同步，不支持多进程同时写文件。
 
