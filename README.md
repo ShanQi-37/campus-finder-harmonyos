@@ -44,7 +44,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 # HTTP 回归：54 项（48 个子测试及 6 个父测试）
 & 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs .\mock\management.test.cjs .\mock\recovery.test.cjs
-# 直接加载 ArkTS 接口校验与状态模型：20 项（含 3 个父测试）
+# 直接加载 ArkTS 接口校验与状态模型：21 项（含 3 个父测试）
 & 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\native-model.test.cjs
 ```
 

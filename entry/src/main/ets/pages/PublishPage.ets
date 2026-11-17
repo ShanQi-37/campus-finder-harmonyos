@@ -171,13 +171,19 @@ export struct PublishPage {
           }.backgroundColor(this.category === category ? Colors.soft : Colors.paper).borderRadius(10)
         }, (category: string) => category)
       }.width('100%').height(88).columnsTemplate('1fr 1fr').rowsTemplate('1fr 1fr').rowsGap(6).columnsGap(6)
-      this.fieldLabel('启事标题', this.title.length + ' / 36')
+      Row({ space: 8 }) {
+        Text('启事标题').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
+        Text(this.title.length + ' / 36').fontSize(11).fontColor(Colors.muted)
+      }.width('100%')
       TextInput({ placeholder: '例如：寻找蓝色校园卡套', text: this.title }).constraintSize({ minHeight: 46 })
         .fontSize(14).maxLength(36).backgroundColor(Colors.paper).borderRadius(10)
         .border({ width: 1, color: this.issue === 'title' ? Colors.red : Colors.stroke }).accessibilityText('启事标题')
         .id('publishTitle').enterKeyType(EnterKeyType.Next).onSubmit(() => { focusControl.requestFocus('publishLocation'); })
         .onChange((value: string) => { this.title = value; this.clearIssue('title'); })
-      this.fieldLabel('遗失或拾取地点', this.location.length + ' / 30')
+      Row({ space: 8 }) {
+        Text('遗失或拾取地点').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
+        Text(this.location.length + ' / 30').fontSize(11).fontColor(Colors.muted)
+      }.width('100%')
       TextInput({ placeholder: '例如：图书馆一楼', text: this.location }).constraintSize({ minHeight: 46 })
         .fontSize(14).maxLength(30).backgroundColor(Colors.paper).borderRadius(10)
         .border({ width: 1, color: this.issue === 'location' ? Colors.red : Colors.stroke }).accessibilityText('遗失或拾取地点')
@@ -194,7 +200,10 @@ export struct PublishPage {
   @Builder
   details() {
     Column({ space: 10 }) {
-      this.fieldLabel('物品描述', this.description.length + ' / 300')
+      Row({ space: 8 }) {
+        Text('物品描述').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
+        Text(this.description.length + ' / 300').fontSize(11).fontColor(Colors.muted)
+      }.width('100%')
       TextArea({ placeholder: '描述颜色、外观或特殊标记，至少 8 字', text: this.description })
         .height(106).fontSize(14).maxLength(300).backgroundColor(Colors.paper).borderRadius(10)
         .border({ width: 1, color: this.issue === 'description' ? Colors.red : Colors.stroke }).accessibilityText('物品描述')

@@ -200,3 +200,28 @@ test('原生管理API：状态参数与舍弃响应契约', async t => {
     assert.equal(destroys, before + 1);
   });
 });
+
+test('原生UI配置：实时字数、Next/Done焦点与系统字体缩放', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/pages/PublishPage.ets'), 'utf8');
+  const app = fs.readFileSync(path.join(__dirname, '../AppScope/app.json5'), 'utf8');
+  const font = JSON.parse(fs.readFileSync(path.join(__dirname, '../AppScope/resources/base/profile/configuration.json'), 'utf8'));
+  assert.equal(app.includes('"configuration": "$profile:configuration"'), true);
+  assert.deepEqual(font.configuration, { fontSizeScale: 'followSystem', fontSizeMaxScale: '2' });
+  const ability = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/entryability/EntryAbility.ets'), 'utf8');
+  const feed = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/components/FeedContent.ets'), 'utf8');
+  const claims = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/pages/ClaimCenterPage.ets'), 'utf8');
+  assert.equal(ability.includes('setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)'), true, '键盘弹出应压缩内容区而非把页头推入安全区');
+  assert.equal(feed.includes("Button('搜索').constraintSize({ minWidth: 64, minHeight: 44 })"), true, '搜索按钮需随字号增长');
+  assert.equal(claims.includes("accessibilityText('申请状态筛选')"), true);
+  assert.equal(claims.includes('.backgroundColor(Colors.surface).width(118).accessibilityText(\'申请状态筛选\')'), false, '申请筛选不能锁定在小字号宽度');
+  for (const [field, max] of [['title', 36], ['location', 30], ['description', 300]]) {
+    assert.equal(source.includes(`Text(this.${field}.length + ' / ${max}')`), true, `${field}计数必须直接订阅@Local状态`);
+  }
+  assert.equal(/this\.fieldLabel\([^\n]*this\.(title|location|description)\.length/.test(source), false, '动态计数不能经按值Builder冻结');
+  assert.equal(source.includes(".id('publishTitle').enterKeyType(EnterKeyType.Next).onSubmit(() => { focusControl.requestFocus('publishLocation'); })"), true);
+  assert.equal(source.includes(".id('publishLocation').enterKeyType(EnterKeyType.Done).onSubmit(() => this.next())"), true);
+  assert.equal(source.includes(".id('publishContact').enterKeyType(EnterKeyType.Next).onSubmit(() => { focusControl.requestFocus('publishDate'); })"), true);
+  assert.equal(source.includes(".id('publishDate').enterKeyType(EnterKeyType.Done).onSubmit(() => this.next())"), true);
+});

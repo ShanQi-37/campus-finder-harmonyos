@@ -37,7 +37,7 @@ export struct FeedContent {
         .backgroundColor(Colors.surface).borderRadius(12).border({ width: 1, color: Colors.stroke }).layoutWeight(1)
         .accessibilityText('按物品或地点搜索，可用空格分隔多个关键词')
         .onChange((value: string) => { this.model.keywordInput = value; }).onSubmit(() => { this.model.search(); })
-      Button('搜索').width(64).constraintSize({ minHeight: 44 }).fontSize(13).fontWeight(FontWeight.Bold)
+      Button('搜索').constraintSize({ minWidth: 64, minHeight: 44 }).fontSize(13).fontWeight(FontWeight.Bold)
         .backgroundColor(Colors.green).borderRadius(12).onClick(() => { this.model.search(); })
     }.width('100%').padding({ left: 16, right: 16 })
     Column() {
@@ -108,7 +108,7 @@ export struct FeedContent {
         .layoutWeight(1).textAlign(TextAlign.Center)
       Button('下一页 ›').constraintSize({ minHeight: 38 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
         .enabled(this.model.hasMore).onClick(() => this.model.turn(1))
-    }.width('100%').padding({ left: 16, right: 16, bottom: 4 })
+    }.width('100%').padding({ left: 16, right: 16, top: 6, bottom: 4 })
   }
 
   build() {
@@ -135,7 +135,7 @@ export struct FeedContent {
                 onOpen: (id: string) => this.onOpen(id) })
             }
           }, (item: Item) => item.id)
-        }.layoutWeight(1).padding({ left: 16, right: 16 }).scrollBar(BarState.Auto).width('100%')
+        }.layoutWeight(1).padding({ left: 16, right: 16, bottom: 12 }).scrollBar(BarState.Auto).width('100%')
         if (this.model.hasMore || this.model.page > 1) { this.pagination() }
       }
     }.width('100%').height('100%')

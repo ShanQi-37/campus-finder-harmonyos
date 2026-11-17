@@ -124,11 +124,11 @@ export struct ClaimCenterPage {
       Row({ space: 7 }) {
         Select(this.statusOptions).selected(this.statuses.indexOf(this.claimStatus))
           .value(this.statusOptions[this.statuses.indexOf(this.claimStatus)].value as string)
-          .font({ size: 13 }).constraintSize({ minHeight: 42 }).backgroundColor(Colors.surface).width(118).accessibilityText('申请状态筛选')
+          .font({ size: 13 }).constraintSize({ minHeight: 42 }).backgroundColor(Colors.surface).layoutWeight(1).accessibilityText('申请状态筛选')
           .onSelect((index: number) => this.selectStatus(this.statuses[index]))
         Text(this.phase === 'loading' ? '正在同步…' :
           (this.phase === 'error' ? '同步失败' : this.claims.length + ' 条记录'))
-          .fontSize(12).fontColor(Colors.muted).layoutWeight(1)
+          .fontSize(12).fontColor(Colors.muted)
         Button('刷新').constraintSize({ minHeight: 42 }).fontSize(12).fontColor(Colors.green).backgroundColor(Colors.surface)
           .onClick(() => { this.load(); })
       }.width('100%')
