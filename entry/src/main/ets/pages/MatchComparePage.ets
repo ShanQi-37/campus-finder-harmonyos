@@ -47,6 +47,7 @@ export struct MatchComparePage {
       Image(categoryArt(item.category)).width(44).height(44).objectFit(ImageFit.Contain)
         .backgroundColor(item.kind === 'found' ? '#EAF2E6' : '#FBF0D9').borderRadius(10).accessibilityLevel('no')
       Text(item.title).fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
       NoticeStatus({ status: item.status })
     }.layoutWeight(1).alignItems(HorizontalAlign.Start).padding(10)
       .backgroundColor(Colors.surface).borderRadius(12)
@@ -58,7 +59,9 @@ export struct MatchComparePage {
       Text(label).fontSize(12).fontWeight(FontWeight.Medium).fontColor(Colors.muted).width('100%')
       Row({ space: 12 }) {
         Text(original).fontSize(14).fontColor(Colors.ink).layoutWeight(1)
+          .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(candidate).fontSize(14).fontColor(Colors.ink).layoutWeight(1)
+          .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%').alignItems(VerticalAlign.Top)
     }.width('100%')
   }

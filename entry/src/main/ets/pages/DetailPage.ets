@@ -84,6 +84,7 @@ export struct DetailPage {
               if (this.section === 'info') {
                 Column({ space: 13 }) {
                   Text('地点  ' + this.item.location).fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+                    .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
                   Text(this.item.occurredAt + '  ·  ' + this.item.ownerName).fontSize(12).fontColor(Colors.muted).width('100%')
                   Divider().color('#E9EEE6')
                   Text(this.item.description).fontSize(14).lineHeight(23).fontColor('#526F63').width('100%')
