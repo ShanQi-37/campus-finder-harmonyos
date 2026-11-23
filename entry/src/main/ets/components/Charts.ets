@@ -5,6 +5,8 @@ export struct CategoryChart {
   @Param points: CountPoint[] = [];
   @Param title: string = '物品类别分布';
   @Param unit: string = '条';
+  @Param showDetails: boolean = false;
+  @Event onBrowse: (category: string) => void = () => {};
   @Local selected: string = '';
   maxCount(): number { return Math.max(1, ...this.points.map((p: CountPoint) => p.count)); }
   build() {
@@ -15,14 +17,22 @@ export struct CategoryChart {
       }.width('100%')
       ForEach(this.points, (point: CountPoint) => {
         Column({ space: 7 }) {
-          Row() { Text(point.label).fontSize(13).fontColor(Colors.ink); Blank(); Text(point.count.toString()).fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green) }.width('100%')
+          Row() {
+            Text(point.label).fontSize(13).fontColor(Colors.ink)
+            Blank()
+            Text(point.count.toString() + (this.showDetails && point.count > 0 ? ' ›' : ''))
+              .fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green)
+          }.width('100%')
           Stack({ alignContent: Alignment.Start }) {
             Rect().width('100%').height(12).fill('#EAF0E6').radius(6)
             Rect().width((point.count / this.maxCount() * 100) + '%').height(12).fill(this.selected === point.label ? Colors.gold : '#62937A').radius(6)
           }.width('100%').height(12)
-        }.width('100%').onClick(() => { this.selected = point.label; })
-          .accessibilityText(point.label + ' ' + point.count + this.unit)
-      }, (point: CountPoint) => point.label)
+        }.width('100%').onClick(() => {
+          this.selected = point.label;
+          if (this.showDetails && point.count > 0) { this.onBrowse(point.label); }
+        }).accessibilityText(point.label + ' ' + point.count + this.unit +
+          (this.showDetails && point.count > 0 ? '，查看明细' : ''))
+      }, (point: CountPoint) => point.label + ':' + point.count)
       if (this.selected.length) {
         Text('已选中 ' + this.selected).fontSize(12).fontColor(Colors.ink).width('100%')
       }

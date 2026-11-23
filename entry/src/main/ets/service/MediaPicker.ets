@@ -51,18 +51,20 @@ export class MediaPicker {
       const options = new photoAccessHelper.PhotoSelectOptions();
       options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
       options.maxSelectNumber = 1;
-      const result = await new photoAccessHelper.PhotoViewPicker().select(options);
-      return result.photoUris.length ? await readMedia(result.photoUris[0], false) : null;
+      const result: photoAccessHelper.PhotoSelectResult | null | undefined =
+        await new photoAccessHelper.PhotoViewPicker().select(options);
+      const uri = result?.photoUris?.[0];
+      return uri ? await readMedia(uri, false) : null;
     }
     const output = context.cacheDir + '/campus-capture-' + Date.now() + (video ? '.mp4' : '.jpg');
     const file = await fileIo.open(output, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);
     await fileIo.close(file);
     try {
-      const result: cameraPicker.PickerResult | undefined = await cameraPicker.pick(context,
+      const result: cameraPicker.PickerResult | null | undefined = await cameraPicker.pick(context,
         [video ? cameraPicker.PickerMediaType.VIDEO : cameraPicker.PickerMediaType.PHOTO],
         { cameraPosition: camera.CameraPosition.CAMERA_POSITION_BACK, saveUri: fileUri.getUriFromPath(output),
           videoDuration: 15 });
-      if (result === undefined || result.resultCode !== 0) { return null; }
+      if (!result || result.resultCode !== 0) { return null; }
       return await readMedia(output, video);
     } finally {
       await fileIo.unlink(output);

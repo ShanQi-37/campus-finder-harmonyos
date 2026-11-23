@@ -13,6 +13,8 @@ test('AI 招领建议仅使用识别出的物品名和外观', () => {
 
 test('媒体选择器：相机空结果按取消处理并清理临时文件', async () => {
   const unlinked = [];
+  let cameraResult;
+  let albumResult;
   const { MediaPicker } = loadEts('service/MediaPicker.ets', {
     '@kit.AbilityKit': { common: {} },
     '@kit.CoreFileKit': {
@@ -25,13 +27,49 @@ test('媒体选择器：相机空结果按取消处理并清理临时文件', as
     '@kit.ImageKit': { image: {} },
     '@kit.CameraKit': {
       camera: { CameraPosition: { CAMERA_POSITION_BACK: 1 } },
-      cameraPicker: { PickerMediaType: { PHOTO: 0, VIDEO: 1 }, pick: async () => undefined }
+      cameraPicker: { PickerMediaType: { PHOTO: 0, VIDEO: 1 }, pick: async () => cameraResult }
     },
-    '@kit.MediaLibraryKit': { photoAccessHelper: {} }
+    '@kit.MediaLibraryKit': { photoAccessHelper: {
+      PhotoSelectOptions: class {},
+      PhotoViewMIMETypes: { IMAGE_TYPE: 'image/*' },
+      PhotoViewPicker: class { async select() { return albumResult; } }
+    } }
   });
   assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, false, false), null);
   assert.equal(unlinked.length, 1);
   assert.match(unlinked[0], /^\/cache\/campus-capture-\d+\.jpg$/);
+  cameraResult = null;
+  assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, true, false), null);
+  assert.match(unlinked[1], /^\/cache\/campus-capture-\d+\.mp4$/);
+  for (const value of [undefined, null, { photoUris: [] }]) {
+    albumResult = value;
+    assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, false, true), null);
+  }
+});
+
+test('描述找物重试与详情返回沿用已提交筛选和当前页', async () => {
+  const calls = [];
+  const criteria = { keyword: '校园卡', category: '证件卡片', location: '图书馆', occurredFrom: '', occurredTo: '' };
+  let failSecondPage = true;
+  const { FoundSearchModel } = loadEts('model/FoundSearchModel.ets', {
+    '../service/Api': { Api: { searchFound: async (scope, page) => {
+      calls.push({ scope, page });
+      if (page === 2 && failSecondPage) throw new Error('连接失败');
+      return { items: [], total: 8, page, pageSize: 6, hasMore: page === 1 };
+    } } }
+  });
+  const model = new FoundSearchModel();
+  await model.search(criteria);
+  assert.equal(model.appliedLabel, '校园卡 · 图书馆 · 证件卡片');
+  await model.turn(1);
+  assert.equal(model.phase, 'error');
+  failSecondPage = false;
+  await model.retry();
+  await model.refresh();
+  assert.equal(model.result.page, 2);
+  assert.equal(model.phase, 'ready');
+  assert.deepEqual(calls.map(call => call.page), [1, 2, 2, 2]);
+  assert.ok(calls.every(call => call.scope === criteria));
 });
 const { ResponseGuard: guard } = loadEts('service/ResponseGuard.ets');
 

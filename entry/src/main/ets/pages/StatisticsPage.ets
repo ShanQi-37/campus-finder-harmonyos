@@ -3,6 +3,24 @@ import { Api } from '../service/Api';
 import { Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
 import { BottomNav } from '../components/BottomNav';
 import { CategoryChart, RecoveryChart, TrendChart } from '../components/Charts';
+
+@ComponentV2
+struct StatisticsMetric {
+  @Param label: string = '';
+  @Param value: number = 0;
+  @Event onOpen: () => void = () => {};
+
+  build() {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 4 }) {
+        Text(this.value.toString()).fontSize(23).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1)
+        Text(this.label + ' ›').fontSize(11).fontColor(Colors.green).maxLines(1)
+      }.width('100%').height('100%').justifyContent(FlexAlign.Center)
+    }.width('100%').height('100%').padding(0).backgroundColor(Colors.surface)
+      .accessibilityText(this.label + ' ' + this.value + ' 条，查看启事').onClick(() => this.onOpen())
+  }
+}
+
 @ComponentV2
 export struct StatisticsPage {
   @Local data: Statistics = emptyStatistics();
@@ -56,7 +74,7 @@ export struct StatisticsPage {
     else if (route === 'Publish') { this.stack.pushPath({ name: 'Publish', param: '' }); }
     else { this.stack.replacePath({ name: route, param: '' }); }
   }
-  openItems(status: string, index: number = -1, dateType: string = 'published'): void {
+  openItems(status: string, index: number = -1, dateType: string = 'published', category: string = this.data.category): void {
     if (this.phase !== 'ready') { return; }
     const recovery = dateType === 'resolved';
     let start = recovery ? this.data.recoveryWindowStart : this.data.windowStart;
@@ -70,18 +88,8 @@ export struct StatisticsPage {
       start = new Date(Date.parse(start) + index * 86400000).toISOString().slice(0, 10);
       end = start;
     }
-    const scope: StatisticsScope = { window: { start: start, end: end }, category: this.data.category, status: status, dateType: dateType };
+    const scope: StatisticsScope = { window: { start: start, end: end }, category: category, status: status, dateType: dateType };
     this.stack.pushPath({ name: 'StatisticsItems', param: scope });
-  }
-  @Builder
-  metric(label: string, value: number, status: string) {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 4 }) {
-        Text(value.toString()).fontSize(23).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1)
-        Text(label + ' ›').fontSize(11).fontColor(Colors.green).maxLines(1)
-      }.width('100%').height('100%').justifyContent(FlexAlign.Center)
-    }.width('100%').height('100%').padding(0).backgroundColor(Colors.surface)
-      .accessibilityText(label + ' ' + value + ' 条，查看启事').onClick(() => this.openItems(status))
   }
   @Builder
   controls() {
@@ -116,9 +124,15 @@ export struct StatisticsPage {
     Scroll() {
       Column({ space: 10 }) {
         Grid() {
-          GridItem() { this.metric('有效启事', this.data.total, 'all') }
-          GridItem() { this.metric('已寻回', this.data.resolved, 'resolved') }
-          GridItem() { this.metric('待寻回', this.data.open, 'open') }
+          GridItem() {
+            StatisticsMetric({ label: '有效启事', value: this.data.total, onOpen: () => this.openItems('all') })
+          }
+          GridItem() {
+            StatisticsMetric({ label: '已寻回', value: this.data.resolved, onOpen: () => this.openItems('resolved') })
+          }
+          GridItem() {
+            StatisticsMetric({ label: '待寻回', value: this.data.open, onOpen: () => this.openItems('open') })
+          }
         }.width('100%').height(65).columnsTemplate('1fr 1fr 1fr').rowsTemplate('1fr')
           .backgroundColor(Colors.surface).borderRadius(14).clip(true)
           .border({ width: 1, color: Colors.stroke })
@@ -137,7 +151,10 @@ export struct StatisticsPage {
           }.width('100%')
         }.width('100%').backgroundColor(Colors.soft).padding(3).borderRadius(13)
         if (this.chart === 'overview') { RecoveryChart({ data: this.data }) }
-        else if (this.chart === 'category') { CategoryChart({ points: this.data.categories }) }
+        else if (this.chart === 'category') {
+          CategoryChart({ points: this.data.categories, showDetails: true,
+            onBrowse: (category: string) => this.openItems('all', -1, 'published', category) })
+        }
         else if (this.chart === 'trend') {
           TrendChart({ points: this.data.trend, selectedDay: this.selectedDay,
             onSelectDay: (day: number) => { this.selectedDay = day; },
