@@ -1,12 +1,12 @@
 import { http } from '@kit.NetworkKit';
-import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary, PhotoMatches, PublicationWindow,
-  PublishInput, Statistics } from '../model/Models';
+import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary,
+  PhotoFunnel, PhotoMatches, PublicationWindow, PublishInput, SearchCriteria, Statistics } from '../model/Models';
 import { ResponseGuard } from './ResponseGuard';
 import { Session } from '../model/Session';
 interface Envelope<T> { code: number; message: string; data: T; }
 export const BASE_URL: string = 'http://127.0.0.1:4524';
 export class Api {
-  private static async request<T>(path: string, body?: string | ArrayBuffer): Promise<T> {
+  private static async request<T>(path: string, body?: string | ArrayBuffer, readTimeout: number = 6000): Promise<T> {
     const client = http.createHttp();
     let businessMessage: string = '';
     try {
@@ -15,7 +15,7 @@ export class Api {
         method: body === undefined ? http.RequestMethod.GET : http.RequestMethod.POST,
         header: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-Demo-User': Session.actor },
         extraData: body ?? '', expectDataType: http.HttpDataType.STRING,
-        connectTimeout: 4000, readTimeout: binary ? 100000 : 6000, usingCache: false
+        connectTimeout: 4000, readTimeout: binary ? 100000 : readTimeout, usingCache: false
       });
       const envelope = JSON.parse(response.result as string) as Envelope<T>;
       if (response.responseCode < 200 || response.responseCode >= 300 || envelope.code !== 0) {
@@ -37,6 +37,28 @@ export class Api {
     const result = await Api.request<PhotoMatches>('/api/media/search', bytes);
     if (!ResponseGuard.photoMatches(result)) { throw new Error('识别结果格式异常'); }
     return result;
+  }
+  static async interpretSearch(query: string): Promise<SearchCriteria> {
+    const value = await Api.request<SearchCriteria>('/api/search/interpret', JSON.stringify({ query: query }), 28000);
+    if (!ResponseGuard.searchCriteria(value)) { throw new Error('识别条件格式异常，请手动填写'); }
+    return value;
+  }
+  static async searchFound(criteria: SearchCriteria, page: number = 1): Promise<ItemList> {
+    let path = '/api/items?kind=found&status=open&pageSize=6&page=' + page +
+      '&keyword=' + encodeURIComponent(criteria.keyword) + '&location=' + encodeURIComponent(criteria.location) +
+      '&category=' + encodeURIComponent(criteria.category);
+    if (criteria.occurredFrom || criteria.occurredTo) {
+      path += '&occurredFrom=' + encodeURIComponent(criteria.occurredFrom) +
+        '&occurredTo=' + encodeURIComponent(criteria.occurredTo);
+    }
+    const data = await Api.request<ItemList>(path);
+    if (!ResponseGuard.list(data)) { throw new Error('返回列表格式异常'); }
+    return data;
+  }
+  static async photoFunnel(days: number): Promise<PhotoFunnel> {
+    const data = await Api.request<PhotoFunnel>('/api/statistics/photo-search?days=' + days);
+    if (!ResponseGuard.photoFunnel(data, days)) { throw new Error('拍照统计格式异常'); }
+    return data;
   }
   static mediaUrl(itemId: string, mediaId: string): string {
     return BASE_URL + '/api/item-media/' + encodeURIComponent(itemId) + '/' + encodeURIComponent(mediaId);

@@ -89,3 +89,11 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 分类结果含 `category`、`object`、`features`。后端限制分类值和特征长度。拍照找物比对识别的名称和特征与候选的标题、描述和已有的识别特征，没有可用候选时返回空列表。联系指引沿用启事的权限规则。
 
 草稿、发布及编辑可用 `mediaId` 引用同一身份上传的附件。明确传空字符串可移除附件。草稿和启事读取时同时返回附件类型 `mediaType`。老记录允许两个字段均缺省。媒体二进制与元数据保存在同一运行目录下。每次上传时清理该身份未被启事或草稿引用的旧附件，保留最近八份。查找用照片只作当次处理。坏格式返回 415，超过大小返回 413，模糊照片或无法解码返回 422，视觉模型调用失败返回 502，缺少配置返回 503。
+
+## 描述找物和拍照统计
+
+`POST /api/search/interpret` 接收 `{query}`，1 至 160 字。以请求当日的上海日期供模型换算相对日期，返回 `keyword`、`location`、`category`、`occurredFrom` 与 `occurredTo`。未知类别为 `all`，未知日期两端为空。模型条件经过长度、枚举、日期及范围校验。条件可编辑；确认后查询 `GET /api/items?kind=found&status=open`。列表新增可选的 `location` 子串条件及 `occurredFrom`、`occurredTo` 首尾包含范围，依据启事发生日期。自然语言输入只作当次解析。
+
+`POST /api/media/search` 在完成识别后额外返回 `searchId`，保存查找身份、上海日期和候选 ID 供统计，照片处理后丢弃。从候选进入详情并提交申请时，客户端随申请发送该 ID。后端只接受当前身份本次返回的候选。未传参数的普通申请继续按原流程处理。
+
+`GET /api/statistics/photo-search?days=7` 支持 7／14／30 天，按截至今日的查找日期聚合，返回 `{days,start,end,recognized,matched,applied,recovered}`。每个阶段按查找 ID 去重，只有关联申请已获发布者通过才计为确认寻回。统计响应仅含汇总数量。

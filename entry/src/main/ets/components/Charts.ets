@@ -3,11 +3,16 @@ import { Colors } from './Common';
 @ComponentV2
 export struct CategoryChart {
   @Param points: CountPoint[] = [];
+  @Param title: string = '物品类别分布';
+  @Param unit: string = '条';
   @Local selected: string = '';
   maxCount(): number { return Math.max(1, ...this.points.map((p: CountPoint) => p.count)); }
   build() {
     Column({ space: 15 }) {
-      Row() { Text('物品类别分布').fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink); Blank(); Text('单位：条').fontSize(11).fontColor(Colors.muted) }.width('100%')
+      Row({ space: 8 }) {
+        Text(this.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
+        Text('单位：' + this.unit).fontSize(11).fontColor(Colors.muted)
+      }.width('100%')
       ForEach(this.points, (point: CountPoint) => {
         Column({ space: 7 }) {
           Row() { Text(point.label).fontSize(13).fontColor(Colors.ink); Blank(); Text(point.count.toString()).fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green) }.width('100%')
@@ -15,7 +20,8 @@ export struct CategoryChart {
             Rect().width('100%').height(12).fill('#EAF0E6').radius(6)
             Rect().width((point.count / this.maxCount() * 100) + '%').height(12).fill(this.selected === point.label ? Colors.gold : '#62937A').radius(6)
           }.width('100%').height(12)
-        }.width('100%').onClick(() => { this.selected = point.label; }).accessibilityText(point.label + ' ' + point.count + '条')
+        }.width('100%').onClick(() => { this.selected = point.label; })
+          .accessibilityText(point.label + ' ' + point.count + this.unit)
       }, (point: CountPoint) => point.label)
       if (this.selected.length) {
         Text('已选中 ' + this.selected).fontSize(12).fontColor(Colors.ink).width('100%')

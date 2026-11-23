@@ -1,4 +1,4 @@
-import { Item, MatchLead, MatchSelection, TimelineEvent, emptyItem } from '../model/Models';
+import { Item, MatchLead, MatchSelection, PhotoCandidate, TimelineEvent, emptyItem } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
 import { categoryArt, Colors, ItemCard, NoticeStatus, PageHeader, SegmentTab, StatePanel } from '../components/Common';
@@ -15,6 +15,7 @@ export struct DetailPage {
   private matchGeneration: number = 0;
   private stack: NavPathStack = new NavPathStack();
   private itemId: string = '';
+  private photoCandidate?: PhotoCandidate;
   private changed: boolean = false;
   private active: boolean = true;
   private generation: number = 0;
@@ -151,7 +152,7 @@ export struct DetailPage {
                   .constraintSize({ minHeight: 44 }).fontSize(13).backgroundColor(Colors.green).layoutWeight(1)
                   .onClick(() => {
                     if (this.item.status === 'open' && !this.item.myPending) {
-                      this.stack.pushPath({ name: 'ClaimForm', param: this.itemId });
+                      this.stack.pushPath({ name: 'ClaimForm', param: this.photoCandidate ?? this.itemId });
                     } else {
                       this.stack.pushPath({ name: 'ClaimCenter', param: this.item.myPending ? 'sent' : 'sent-history' });
                     }
@@ -162,7 +163,16 @@ export struct DetailPage {
             .backgroundColor(Colors.surface).border({ width: { top: 1 }, color: Colors.stroke })
         }
       }.width('100%').height('100%').backgroundColor(Colors.paper)
-    }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; this.itemId = context.pathInfo.param as string; })
+    }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
+      this.stack = context.pathStack;
+      const param = context.pathInfo.param as string | PhotoCandidate;
+      if (typeof param === 'string') {
+        this.itemId = param;
+      } else {
+        this.photoCandidate = param;
+        this.itemId = param.itemId;
+      }
+    })
       .onShown(() => {
         this.active = true;
         const keepMatches = this.section === 'matches' && this.matchPhase === 'ready';

@@ -2,7 +2,9 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
-const { MediaError, readUpload, prepareMedia, parseRecognition, createVisionProvider, rankMatches, createMediaStore } = require('./vision.cjs');
+const { ID, MediaError, readUpload, prepareMedia, parseRecognition, createVisionProvider, createSearchInterpreter,
+  rankMatches, createMediaStore } = require('./vision.cjs');
+const { searchCriteria, photoFunnel } = require('./search.cjs');
 const CATEGORIES = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 const dateKey = (date = new Date()) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 function isDateKey(value) {
@@ -108,9 +110,10 @@ function createApp(options = {}) {
   // Legacy arrays are migrated without losing any previously published records.
   let store = Array.isArray(rawStore) ? { version: 2, items: rawStore.map(normalize), claims: [], favorites: [] }
     : { ...rawStore, version: 2, items: rawStore.items.map(normalize) };
-  store = { ...store, drafts: store.drafts || [] };
+  store = { ...store, drafts: store.drafts || [], photoSearches: store.photoSearches || [] };
   const mediaStore = createMediaStore(path.join(path.dirname(file), 'media'), options.memory);
   const recognize = options.recognize ?? createVisionProvider(CATEGORIES);
+  const interpretSearch = options.interpretSearch ?? createSearchInterpreter(CATEGORIES);
   let activeMedia = 0;
   let fault = 'normal';
   const commit = next => {
@@ -173,7 +176,10 @@ function createApp(options = {}) {
             if (analysisStatus === 'uncertain') return reply(res, 422, null, '没能识别物品，请用光线充足的单物品照片重试');
             const matches = rankMatches(store.items, recognition, item =>
               item.mediaId && mediaStore.get(item.owner, item.mediaId)?.recognition, actor);
-            return reply(res, 200, { recognition, matches: matches.map(({ item, reasons }) => ({ item: view(item), reasons })) });
+            const search = { id: randomUUID(), actor, day: dateKey(), candidateIds: matches.map(({ item }) => item.id) };
+            commit({ ...store, photoSearches: [...store.photoSearches, search] });
+            return reply(res, 200, { searchId: search.id, recognition,
+              matches: matches.map(({ item, reasons }) => ({ item: view(item), reasons })) });
           }
           const id = randomUUID();
           const referenced = new Set([
@@ -208,8 +214,25 @@ function createApp(options = {}) {
       const mediaFields = () => body.mediaId ? { mediaId: body.mediaId, mediaType: mediaStore.get(actor, body.mediaId).type } : {};
       const claimView = claim => {
         const item = store.items.find(i => i.id === claim.itemId);
-        return { ...claim, itemTitle: item.title, kind: item.kind, category: item.category, senderName: names[claim.sender], ownerName: names[claim.owner] };
+        const { photoSearchId, ...visible } = claim;
+        return { ...visible, itemTitle: item.title, kind: item.kind, category: item.category, senderName: names[claim.sender], ownerName: names[claim.owner] };
       };
+      if (url.pathname === '/api/search/interpret' && req.method === 'POST') {
+        if (typeof body.query !== 'string' || !body.query.trim() || body.query.trim().length > 160) {
+          return reply(res, 400, null, '请填写 1 至 160 字的找物描述');
+        }
+        if (!interpretSearch) return reply(res, 503, null, 'AI 解析尚未配置，可手动填写搜索条件');
+        const today = dateKey();
+        try {
+          const criteria = searchCriteria(await interpretSearch(body.query.trim(), today), CATEGORIES, today, isDateKey);
+          return criteria ? reply(res, 200, criteria) : reply(res, 422, null, '未提取到有效条件，请手动填写或修改描述');
+        } catch { return reply(res, 502, null, 'AI 解析暂不可用，请重试或手动填写'); }
+      }
+      if (url.pathname === '/api/statistics/photo-search' && req.method === 'GET') {
+        const days = Number(url.searchParams.get('days') || 7);
+        if (![7, 14, 30].includes(days)) return reply(res, 400, null, '统计天数无效');
+        return reply(res, 200, photoFunnel(fault === 'empty' ? [] : store.photoSearches, store.claims, days, dateKey()));
+      }
       if (url.pathname === '/api/me' && req.method === 'GET') {
         const own = list.filter(i => i.owner === actor), claims = fault === 'empty' ? [] : store.claims;
         const draft = fault === 'empty' ? undefined : store.drafts.find(d => d.actor === actor);
@@ -272,6 +295,17 @@ function createApp(options = {}) {
         // Withdrawn notices stay in the owner's management area only.
         if (url.searchParams.get('owner') !== actor) result = result.filter(i => i.status !== 'withdrawn');
         if (url.searchParams.get('saved') === 'true') result = result.filter(i => store.favorites.some(f => f.actor === actor && f.itemId === i.id));
+        const location = (url.searchParams.get('location') || '').trim();
+        const occurredFrom = url.searchParams.get('occurredFrom');
+        const occurredTo = url.searchParams.get('occurredTo');
+        if (location.length > 30) return reply(res, 400, null, '地点最多30字');
+        if (location) result = result.filter(item => normalizeSearch(item.location).includes(normalizeSearch(location)));
+        if (occurredFrom !== null || occurredTo !== null) {
+          if (!isDateKey(occurredFrom) || !isDateKey(occurredTo) || occurredFrom > occurredTo || occurredTo > dateKey()) {
+            return reply(res, 400, null, '发生日期范围无效');
+          }
+          result = result.filter(item => item.occurredAt >= occurredFrom && item.occurredAt <= occurredTo);
+        }
         const from = url.searchParams.get('publishedFrom');
         const to = url.searchParams.get('publishedTo');
         if (from !== null || to !== null) {
@@ -372,7 +406,14 @@ function createApp(options = {}) {
           if (item.status !== 'open') return reply(res, 409, null, '启事已结束，不能继续申请');
           if (typeof body.proof !== 'string' || body.proof.trim().length < 8 || body.proof.trim().length > 240 || typeof body.contact !== 'string' || body.contact.trim().length < 2 || body.contact.trim().length > 60) return reply(res, 400, null, '核对说明需8-240字，联系指引需2-60字');
           if (store.claims.some(c => c.itemId === id && c.sender === actor && c.status === 'pending')) return reply(res, 409, null, '已有待核对申请，请到申请中心查看');
-          const claim = { id: randomUUID(), itemId: id, sender: actor, owner: item.owner, proof: body.proof.trim(), contact: body.contact.trim(), status: 'pending', createdAt: now(), updatedAt: now() };
+          const source = body.photoSearchId;
+          if (source !== undefined && (typeof source !== 'string' || !ID.test(source) ||
+            !store.photoSearches.some(search => search.id === source && search.actor === actor && search.candidateIds.includes(id)))) {
+            return reply(res, 400, null, '此申请的拍照找物来源无效');
+          }
+          const claim = { id: randomUUID(), itemId: id, sender: actor, owner: item.owner, proof: body.proof.trim(),
+            contact: body.contact.trim(), status: 'pending', createdAt: now(), updatedAt: now(),
+            ...(source === undefined ? {} : { photoSearchId: source }) };
           commit({ ...store, claims: [claim, ...store.claims] }); return reply(res, 201, claimView(claim));
         }
         if (item.owner !== actor) return reply(res, 403, null, '仅可操作本人发布的信息');

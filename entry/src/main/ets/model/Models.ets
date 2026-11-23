@@ -18,7 +18,7 @@ export interface Statistics {
   anchor: string; windowStart: string; windowEnd: string; recoveryWindowStart: string; recoveryWindowEnd: string; updatedAt: string;
 }
 export interface PublishInput { title: string; category: string; kind: string; location: string; description: string; contact: string; occurredAt: string; requestId: string; mediaId?: string; mediaType?: string; }
-export interface ClaimInput { proof: string; contact: string; }
+export interface ClaimInput { proof: string; contact: string; photoSearchId?: string; }
 export interface Claim {
   id: string; itemId: string; itemTitle: string; category: string; kind: string; sender: string; owner: string;
   senderName: string; ownerName: string; proof: string; contact: string; status: string; createdAt: string; updatedAt: string;
@@ -28,7 +28,14 @@ export interface MatchLead { item: Item; reasons: string[]; }
 export interface MatchList { matches: MatchLead[]; }
 export interface Recognition { category: string; object: string; features: string[]; }
 export interface MediaUpload { id: string; type: string; recognition: Recognition | null; analysisStatus: string; }
-export interface PhotoMatches extends MatchList { recognition: Recognition; }
+export interface PhotoMatches extends MatchList { recognition: Recognition; searchId?: string; }
+export interface PhotoCandidate { itemId: string; searchId: string; }
+export interface SearchCriteria {
+  keyword: string; location: string; category: string; occurredFrom: string; occurredTo: string;
+}
+export interface PhotoFunnel {
+  days: number; start: string; end: string; recognized: number; matched: number; applied: number; recovered: number;
+}
 export interface MatchSelection { sourceId: string; candidateId: string; }
 export interface DraftState { exists: boolean; input: PublishInput | null; updatedAt: string; }
 export interface PersonalSummary { posted: number; open: number; resolved: number; saved: number; incomingPending: number; outgoingPending: number; draftTitle: string; draftUpdatedAt: string; }

@@ -1,14 +1,16 @@
 import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary,
-  PhotoMatches, PublishInput, Recognition, Statistics, TrendPoint } from '../model/Models';
+  PhotoFunnel, PhotoMatches, PublishInput, Recognition, SearchCriteria, Statistics, TrendPoint } from '../model/Models';
 
 // Check every field used by the UI before accepting an untrusted HTTP payload.
 export class ResponseGuard {
   static count(value: number): boolean { return Number.isSafeInteger(value) && value >= 0; }
   static strings(values: string[]): boolean { return values.every((value: string) => typeof value === 'string'); }
+  static uuid(value: string): boolean {
+    return typeof value === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
+  }
   static attachment(id?: string, type?: string): boolean {
     return id === undefined ? type === undefined :
-      typeof id === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id) &&
-      (type === 'photo' || type === 'video');
+      ResponseGuard.uuid(id) && (type === 'photo' || type === 'video');
   }
   static recognition(value: Recognition | null): boolean {
     return !!value && CATEGORIES.includes(value.category) && typeof value.object === 'string' &&
@@ -22,7 +24,21 @@ export class ResponseGuard {
       (value.analysisStatus !== 'recognized' || ResponseGuard.recognition(value.recognition));
   }
   static photoMatches(value: PhotoMatches): boolean {
-    return ResponseGuard.matches(value) && ResponseGuard.recognition(value.recognition);
+    return ResponseGuard.matches(value) && ResponseGuard.recognition(value.recognition) &&
+      (value.searchId === undefined || ResponseGuard.uuid(value.searchId));
+  }
+  static searchCriteria(value: SearchCriteria): boolean {
+    return !!value && ResponseGuard.strings([value.keyword, value.location, value.category, value.occurredFrom, value.occurredTo]) &&
+      value.keyword.length <= 80 && value.location.length <= 30 &&
+      (value.category === 'all' || CATEGORIES.includes(value.category)) &&
+      ((value.occurredFrom === '' && value.occurredTo === '') ||
+        (ResponseGuard.date(value.occurredFrom) && ResponseGuard.date(value.occurredTo) && value.occurredFrom <= value.occurredTo));
+  }
+  static photoFunnel(value: PhotoFunnel, days: number): boolean {
+    return !!value && value.days === days && ResponseGuard.date(value.start) && ResponseGuard.date(value.end) &&
+      Date.parse(value.end) - Date.parse(value.start) === (days - 1) * 86400000 &&
+      [value.recognized, value.matched, value.applied, value.recovered].every((n: number) => ResponseGuard.count(n)) &&
+      value.recognized >= value.matched && value.matched >= value.applied && value.applied >= value.recovered;
   }
   static time(value: string): boolean { return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value)); }
   static date(value: string): boolean {

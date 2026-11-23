@@ -5,6 +5,8 @@ import { BottomNav } from '../components/BottomNav';
 import { FeedContent } from '../components/FeedContent';
 import { DetailPage } from './DetailPage';
 import { PhotoSearchPage } from './PhotoSearchPage';
+import { TextSearchPage } from './TextSearchPage';
+import { PhotoFunnelPage } from './PhotoFunnelPage';
 import { MatchComparePage } from './MatchComparePage';
 import { PublishPage } from './PublishPage';
 import { MyPage } from './MyPage';
@@ -34,6 +36,8 @@ struct Index {
   destination(name: string) {
     if (name === 'Detail') { DetailPage() }
     else if (name === 'PhotoSearch') { PhotoSearchPage() }
+    else if (name === 'TextSearch') { TextSearchPage() }
+    else if (name === 'PhotoFunnel') { PhotoFunnelPage() }
     else if (name === 'MatchCompare') { MatchComparePage() }
     else if (name === 'Publish') { PublishPage() }
     else if (name === 'My') { MyPage() }
@@ -55,7 +59,9 @@ struct Index {
             Image($r('app.media.campus_hero')).width(86).height(70).objectFit(ImageFit.Contain).accessibilityLevel('no')
           }.width('100%').height(80).padding({ left: 15, right: 8 }).backgroundColor('#134E45').borderRadius(16)
         }.width('100%').padding({ left: 16, right: 16 })
-        Row() {
+        Row({ space: 8 }) {
+          Button('描述找物 ›').fontSize(13).constraintSize({ minHeight: 40 }).fontColor(Colors.green)
+            .backgroundColor(Colors.soft).onClick(() => this.open('TextSearch'))
           Button('拍照找物 ›').fontSize(13).constraintSize({ minHeight: 40 }).fontColor(Colors.green)
             .backgroundColor(Colors.soft).onClick(() => this.open('PhotoSearch'))
         }.width('100%').padding({ left: 16, right: 16 }).justifyContent(FlexAlign.End)

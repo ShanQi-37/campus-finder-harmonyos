@@ -107,6 +107,35 @@ test('媒体上传、草稿、AI 分类与拍照匹配', async t => {
     assert.equal(result.status, 201);
     assert.equal((await result.json()).data.analysisStatus, 'failed');
   });
+
+  await t.test('拍照候选的真实申请与确认寻回进入同一统计', async () => {
+    quality = 'clear';
+    const openItem = await post('/api/items', { ...notice, requestId: 'funnel-notice' }, 'peer-01');
+    assert.equal(openItem.status, 201);
+    const itemId = (await openItem.json()).data.id;
+    const response = await post('/api/media/search', photo);
+    const result = (await response.json()).data;
+    assert.ok(result.matches.some(candidate => candidate.item.id === itemId));
+    const funnel = async () => (await (await request('/api/statistics/photo-search?days=7')).json()).data;
+    const before = await funnel();
+    const claimPath = '/api/items/' + itemId + '/claims';
+    const input = { proof: '物品有白色贴纸，在图书馆遗失。', contact: '服务台转接', photoSearchId: result.searchId };
+    assert.equal((await post(claimPath, input, 'peer-02')).status, 400);
+    assert.equal((await post('/api/items/seed-1/claims', input)).status, 400);
+    const submitted = await post(claimPath, input);
+    assert.equal(submitted.status, 201);
+    const claim = (await submitted.json()).data;
+    assert.equal(claim.photoSearchId, undefined);
+    assert.equal((await funnel()).applied, before.applied + 1);
+    assert.equal((await funnel()).recovered, before.recovered);
+    assert.equal((await post('/api/claims/' + claim.id + '/accept', {}, 'peer-01')).status, 200);
+    await close();
+    server = await open();
+    const final = await funnel();
+    assert.equal(final.recognized, before.recognized);
+    assert.equal(final.matched, before.matched);
+    assert.equal(final.recovered, before.recovered + 1);
+  });
 });
 
 test('视觉适配器向兼容服务提交图像并解析分类', async t => {

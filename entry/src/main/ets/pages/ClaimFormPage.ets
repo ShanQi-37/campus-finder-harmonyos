@@ -1,4 +1,4 @@
-import { Item, ClaimInput, emptyItem } from '../model/Models';
+import { Item, ClaimInput, PhotoCandidate, emptyItem } from '../model/Models';
 import { Api } from '../service/Api';
 import { categoryArt, Colors, PageHeader, StatePanel } from '../components/Common';
 
@@ -13,6 +13,7 @@ export struct ClaimFormPage {
   @Local busy: boolean = false;
   private stack: NavPathStack = new NavPathStack();
   private itemId: string = '';
+  private photoSearchId?: string;
   private active: boolean = true;
 
   async load(): Promise<void> {
@@ -62,7 +63,7 @@ export struct ClaimFormPage {
     this.busy = true;
     this.issue = '';
     this.error = '';
-    const input: ClaimInput = { proof: this.proof, contact: this.contact };
+    const input: ClaimInput = { proof: this.proof, contact: this.contact, photoSearchId: this.photoSearchId };
     try {
       await Api.claim(this.itemId, input);
       if (this.active) { this.stack.pop({ changed: true }); }
@@ -149,7 +150,13 @@ export struct ClaimFormPage {
       }.width('100%').height('100%').backgroundColor(Colors.paper)
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
-      this.itemId = context.pathInfo.param as string;
+      const param = context.pathInfo.param as string | PhotoCandidate;
+      if (typeof param === 'string') {
+        this.itemId = param;
+      } else {
+        this.itemId = param.itemId;
+        this.photoSearchId = param.searchId;
+      }
       this.load();
     }).onBackPressed(() => { this.back(); return true; }).onDisAppear(() => { this.active = false; })
   }

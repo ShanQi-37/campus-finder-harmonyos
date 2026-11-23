@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { Colors, ItemCard, PageHeader } from '../components/Common';
-import { MatchLead, PhotoMatches } from '../model/Models';
+import { MatchLead, PhotoCandidate, PhotoMatches } from '../model/Models';
 import { Api } from '../service/Api';
 import { MediaPicker } from '../service/MediaPicker';
 
@@ -28,6 +28,13 @@ export struct PhotoSearchPage {
     } finally {
       if (ticket === this.generation) { this.busy = false; }
     }
+  }
+
+  openCandidate(id: string): void {
+    const searchId = this.result?.searchId;
+    if (!searchId) { this.stack.pushPath({ name: 'Detail', param: id }); return; }
+    const candidate: PhotoCandidate = { itemId: id, searchId: searchId };
+    this.stack.pushPath({ name: 'Detail', param: candidate });
   }
 
   build() {
@@ -61,9 +68,7 @@ export struct PhotoSearchPage {
               }
               ForEach(this.result.matches, (lead: MatchLead) => {
                 Column({ space: 4 }) {
-                  ItemCard({ item: lead.item, onOpen: (id: string) => {
-                    this.stack.pushPath({ name: 'Detail', param: id });
-                  } })
+                  ItemCard({ item: lead.item, onOpen: (id: string) => this.openCandidate(id) })
                   Text(lead.reasons.join(' · ')).fontSize(12).fontColor(Colors.green).width('100%')
                 }.width('100%')
               }, (lead: MatchLead) => lead.item.id)

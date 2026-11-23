@@ -163,6 +163,11 @@ export struct StatisticsPage {
       Column({ space: 8 }) {
         PageHeader({ title: '校园互助统计', subtitle: '启事发布与寻回数据', back: true, onBack: () => { this.stack.pop(); } })
         this.controls()
+        Row() {
+          Button('拍照找物统计 ›').fontSize(13).constraintSize({ minHeight: 40 })
+            .fontColor(Colors.green).backgroundColor(Colors.soft)
+            .onClick(() => { this.stack.pushPath({ name: 'PhotoFunnel', param: '' }); })
+        }.width('100%').padding({ left: 16, right: 16 }).justifyContent(FlexAlign.End)
         if (this.phase === 'ready' || this.phase === 'empty') {
           Text(this.chart === 'recovery' ?
             this.data.recoveryWindowStart + ' 至 ' + this.data.recoveryWindowEnd + ' · 按实际确认寻回日期' :

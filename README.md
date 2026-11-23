@@ -14,6 +14,8 @@
 
 [统计筛选入口](screenshots/ui-refresh/statistics-link.png) · [对应启事明细](screenshots/ui-refresh/statistics-items.png)
 
+[拍照找物统计](screenshots/ui-refresh/ai-photo-funnel.png)
+
 [相似线索对比](screenshots/ui-refresh/match-compare.png) · [发布者核对指引](screenshots/ui-refresh/claim-guidance.png)
 
 ## 功能
@@ -23,8 +25,10 @@
 - 相似线索：从开放启事查找同类、相反类型、不同发布者的候选，按地点和日期排序。点「对比线索」可核对摘要、地点、发生日期和上下排列的完整描述，查看候选启事或继续申请。
 - 招领媒体：可拍照、录短视频或选取相册照片。识别成功后自动填入四种既有类别之一，并预览标题和外观描述建议。发布者可将建议填入空白字段、手动修改并预览后发布。附件可在详情中查看。
 - 拍照找物：从广场上传照片，利用识别结果、附件外观特征与启事文字排序，最多显示五条待认领候选。没有附件的旧启事也可通过标题、描述参与匹配。
+- 描述找物：输入一句话后可让 AI 提取物品关键词、地点、类别和发生日期。确认或修改条件后再搜索开放招领启事。也可直接填写筛选条件。
+- 拍照找物统计：从统计页进入，查看最近 7、14 或 30 日的识别、候选、申请和确认寻回。柱状图接收 HTTP 聚合数据，同一次查找在每阶段最多计一次。确认数来自发布者接受该次查找关联的实际申请。
 - 个人任务：待我核对、我的申请、发布草稿和收藏数量均来自HTTP；广场、统计、我的复用矢量底部导航，主入口切换替换栈顶。
-- 十个 Navigation 业务页面包括失物广场、拍照找物、线索详情、相似线索对比、三步发布/编辑、我的校园、互助统计、统计启事明细、申请表单和认领与线索中心。
+- 十二个 Navigation 业务页面包括失物广场、拍照找物、描述找物、拍照找物统计、线索详情、相似线索对比、三步发布/编辑、我的校园、互助统计、统计启事明细、申请表单和认领与线索中心。
 - 广场支持类型、类别、多词搜索、状态和排序。点「筛选」可展开分类、状态和排序设置，收起后仍显示已选项数量。用空格分隔关键词，例如「校园卡 图书馆」。每页最多 6 条，翻页与重试沿用已提交的条件。
 - 启事生命周期：待寻回 → 已寻回；待寻回 → 已撤回 → 恢复待寻回。仅所属演示身份能管理。
 - 申请认领或提供线索时，表单会指出缺少的核对说明或联系指引。申请中心按身份和状态提示当前由谁核对及下一步操作。确认寻回会关闭同一物品的其他待核对申请，申请者也可以取消仍在等待的申请。
@@ -44,8 +48,8 @@
 powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
 # 另一窗口编译
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
-# HTTP 回归：60 项（54 个子测试及 6 个父测试，含媒体与视觉接口）
-& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs .\mock\management.test.cjs .\mock\recovery.test.cjs .\mock\vision.test.cjs
+# HTTP 及查找逻辑回归：63 项（含媒体、描述找物和统计归因）
+& 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs .\mock\management.test.cjs .\mock\recovery.test.cjs .\mock\vision.test.cjs .\mock\search.test.cjs
 # 直接加载 ArkTS 接口校验、状态模型、招领建议和媒体取消边界：23 项（含 3 个父测试）
 & 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\native-model.test.cjs
 ```
@@ -61,7 +65,7 @@ Previewer连接 `http://127.0.0.1:4524`。本地模拟器可用 `hdc rport tcp:4
 - 媒体上传需要服务端 FFmpeg（包含 H.264 编码器），可放入 PATH 或通过 `CAMPUS_FFMPEG` 指定可执行文件。每条招领启事可附一张照片或一段短视频，视频保留前 15 秒画面，去除音轨并转换为 MP4。
 - 启动 Mock 前在服务端环境设置 `CAMPUS_VISION_API_KEY` 与 `CAMPUS_VISION_MODEL`。可选设置 `CAMPUS_VISION_BASE_URL`，默认 `https://api.openai.com/v1`。服务必须兼容 Chat Completions 的图片输入与 JSON 输出，密钥只由服务端使用。模型会接收处理后的照片或视频画面。 [图片输入参考](https://developers.openai.com/api/docs/guides/images-vision)
 - 未配置模型时，招领附件仍可上传，分类由用户选择，广场仍可使用关键词搜索。发布附件保存在本机的 `mock/runtime/media`，查找用照片处理后丢弃。课堂演示请使用虚构样图。 [HarmonyOS 系统相机参考](https://developer.huawei.com/consumer/en/doc/harmonyos-references/js-apis-camerapicker/)
-- 使用 `node --test mock/vision.test.cjs` 跑媒体专项。全量共 83 项，含 6 项媒体与视觉接口测试、1 项招领建议测试及 1 项相机空结果取消测试。专项以真实 FFmpeg 和本机视觉服务替身覆盖短视频抽帧、附件持久化、发布重试、范围读取、照片匹配和视觉服务失败回退。真实视觉服务仍需配置后联调，真实相机拍摄、中文输入法和视频播放需在实体设备上复验。
+- 描述找物的 AI 提取沿用同一模型配置。未配置识别服务或解析失败时仍可手动搜索。全量测试共 86 项。本机识别服务替身及真实 FFmpeg 用于验证媒体和查找流程。真实模型识别、相机、中文输入法和视频播放需在相应设备与服务环境复验。
 
 ## 双角色演示
 
