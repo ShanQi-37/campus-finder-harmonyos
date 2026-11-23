@@ -6,7 +6,7 @@
 
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
-| GET | /health | 服务版本与记录数量 |
+| GET | /health | 服务版本、记录数量和 AI 配置状态 |
 | GET | /api/items | 列表、搜索、组合筛选、分页 |
 | GET | /api/items/:id | 详情、联系可见性、收藏、动态记录 |
 | POST | /api/items | 新建，201；requestId支持同身份重试幂等 |
@@ -19,6 +19,8 @@
 | GET | /api/claims?direction=received或sent | 当前身份收到/发出的申请 |
 | POST | /api/claims/:id/accept或reject或cancel | 发布者接受/拒绝，申请者取消 |
 | GET | /api/statistics?days=7或14或30&category=all或类别&anchor=today或latest | 动态聚合 |
+
+`/health` 的 `data.ai` 含 `imageConfigured` 和 `textConfigured` 两个布尔值。它们反映本机服务是否已装载模型配置。接口不发出模型请求。联调方法见 [AI 接口配置](AI_SETUP.md)。
 
 列表参数kind=all/lost/found，category=all或四类别，keyword匹配标题、地点或描述（最多80字），owner可为空、all或三种合法体验身份，status=all/open/resolved/withdrawn，sort=latest/oldest，saved=true/false，page正整数，pageSize=1..100。客户端每页 6 条，接口默认 100。返回items,total,page,pageSize,hasMore。撤回启事仅本人管理列表可见，他人访问详情404。
 

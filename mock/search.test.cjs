@@ -17,6 +17,9 @@ test('描述找物返回可编辑条件并按实际发生日期搜索', async t 
   const base = `http://127.0.0.1:${server.address().port}`;
   const get = async path => fetch(base + path);
   const post = async (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body) });
+  const health = (await (await get('/health')).json()).data;
+  assert.equal(health.ai.textConfigured, true);
+  assert.equal(typeof health.ai.imageConfigured, 'boolean');
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
   const yesterday = new Date(Date.parse(today) - 86400000).toISOString().slice(0, 10);
   reply = { keyword: '透明 收纳夹', location: '图书馆', category: '学习文具', occurredFrom: yesterday, occurredTo: yesterday };

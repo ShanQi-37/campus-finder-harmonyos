@@ -62,6 +62,8 @@ Previewer连接 `http://127.0.0.1:4524`。本地模拟器可用 `hdc rport tcp:4
 
 ### 开启 AI 分类和拍照找物
 
+使用隐藏输入的启动脚本，可在本机配置模型与密钥，并执行状态、文本和照片联调。[AI 配置步骤](docs/AI_SETUP.md)
+
 - 媒体上传需要服务端 FFmpeg（包含 H.264 编码器），可放入 PATH 或通过 `CAMPUS_FFMPEG` 指定可执行文件。每条招领启事可附一张照片或一段短视频，视频保留前 15 秒画面，去除音轨并转换为 MP4。
 - 启动 Mock 前在服务端环境设置 `CAMPUS_VISION_API_KEY` 与 `CAMPUS_VISION_MODEL`。可选设置 `CAMPUS_VISION_BASE_URL`，默认 `https://api.openai.com/v1`。服务必须兼容 Chat Completions 的图片输入与 JSON 输出，密钥只由服务端使用。模型会接收处理后的照片或视频画面。 [图片输入参考](https://developers.openai.com/api/docs/guides/images-vision)
 - 未配置模型时，招领附件仍可上传，分类由用户选择，广场仍可使用关键词搜索。发布附件保存在本机的 `mock/runtime/media`，查找用照片处理后丢弃。课堂演示请使用虚构样图。 [HarmonyOS 系统相机参考](https://developer.huawei.com/consumer/en/doc/harmonyos-references/js-apis-camerapicker/)

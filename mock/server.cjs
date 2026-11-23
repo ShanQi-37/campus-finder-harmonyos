@@ -202,7 +202,10 @@ function createApp(options = {}) {
         if (!['normal', 'error', 'empty', 'slow', 'malformed', 'shape'].includes(body.mode)) return reply(res, 400, null, '模式无效');
         fault = body.mode; return reply(res, 200, { mode: fault });
       }
-      if (url.pathname === '/health') return reply(res, 200, { service: 'CampusFinder', version: 2, count: store.items.length });
+      if (url.pathname === '/health') {
+        return reply(res, 200, { service: 'CampusFinder', version: 2, count: store.items.length,
+          ai: { imageConfigured: !!recognize, textConfigured: !!interpretSearch } });
+      }
       if (!url.pathname.startsWith('/api/')) return reply(res, 404, null, '接口不存在');
       await new Promise(resolve => setTimeout(resolve, fault === 'slow' ? 2500 : (options.delay ?? 250)));
       if (req.method === 'GET' && fault === 'error') return reply(res, 503, null, '服务暂不可用，请稍后重试');
