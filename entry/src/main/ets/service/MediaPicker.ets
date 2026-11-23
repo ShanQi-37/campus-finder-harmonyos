@@ -58,11 +58,12 @@ export class MediaPicker {
     const file = await fileIo.open(output, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);
     await fileIo.close(file);
     try {
-      const result = await cameraPicker.pick(context,
+      const result: cameraPicker.PickerResult | undefined = await cameraPicker.pick(context,
         [video ? cameraPicker.PickerMediaType.VIDEO : cameraPicker.PickerMediaType.PHOTO],
         { cameraPosition: camera.CameraPosition.CAMERA_POSITION_BACK, saveUri: fileUri.getUriFromPath(output),
           videoDuration: 15 });
-      return result.resultCode === 0 ? await readMedia(output, video) : null;
+      if (result === undefined || result.resultCode !== 0) { return null; }
+      return await readMedia(output, video);
     } finally {
       await fileIo.unlink(output);
     }

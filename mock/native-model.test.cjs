@@ -10,6 +10,29 @@ test('AI 招领建议仅使用识别出的物品名和外观', () => {
   assert.equal(suggestion.description, '拾到一件保温杯，可见外观：绿色、白色贴纸。');
   assert.equal(suggestFoundNotice({ category: '生活用品', object: '水杯', features: [] }).description, '');
 });
+
+test('媒体选择器：相机空结果按取消处理并清理临时文件', async () => {
+  const unlinked = [];
+  const { MediaPicker } = loadEts('service/MediaPicker.ets', {
+    '@kit.AbilityKit': { common: {} },
+    '@kit.CoreFileKit': {
+      fileIo: {
+        OpenMode: { READ_ONLY: 0, CREATE: 1, WRITE_ONLY: 2 },
+        open: async () => ({ fd: 1 }), close: async () => {}, unlink: async path => { unlinked.push(path); }
+      },
+      fileUri: { getUriFromPath: path => 'file://' + path }
+    },
+    '@kit.ImageKit': { image: {} },
+    '@kit.CameraKit': {
+      camera: { CameraPosition: { CAMERA_POSITION_BACK: 1 } },
+      cameraPicker: { PickerMediaType: { PHOTO: 0, VIDEO: 1 }, pick: async () => undefined }
+    },
+    '@kit.MediaLibraryKit': { photoAccessHelper: {} }
+  });
+  assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, false, false), null);
+  assert.equal(unlinked.length, 1);
+  assert.match(unlinked[0], /^\/cache\/campus-capture-\d+\.jpg$/);
+});
 const { ResponseGuard: guard } = loadEts('service/ResponseGuard.ets');
 
 test('原生响应校验器：真实服务契约与损坏结构', async t => {
