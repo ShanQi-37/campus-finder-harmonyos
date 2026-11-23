@@ -21,7 +21,7 @@
 - 管理升级：本人启事可按待寻回、已寻回、已撤回筛选；申请中心默认聚焦待核对，可查看全部、已通过、未通过、已取消。草稿支持二次确认舍弃，并校验身份与保存版本，旧页面不会误删新内容。
 - 发布和草稿：分为基本信息、补充线索和预览确认。预览页可以直接返回修改指定部分，并区分公开内容和联系指引。在「我的校园」可按体验身份继续填写草稿，发布成功后服务会清理对应草稿。
 - 相似线索：从开放启事查找同类、相反类型、不同发布者的候选，按地点和日期排序。点「对比线索」可核对摘要、地点、发生日期和上下排列的完整描述，查看候选启事或继续申请。
-- 招领媒体：可拍照、录短视频或选取相册照片。识别成功后自动填入四种既有类别之一，发布者可修改。附件随招领启事发布，可在详情中查看。
+- 招领媒体：可拍照、录短视频或选取相册照片。识别成功后自动填入四种既有类别之一，并预览标题和外观描述建议。发布者可将建议填入空白字段、手动修改并预览后发布。附件可在详情中查看。
 - 拍照找物：从广场上传照片，利用识别结果、附件外观特征与启事文字排序，最多显示五条待认领候选。没有附件的旧启事也可通过标题、描述参与匹配。
 - 个人任务：待我核对、我的申请、发布草稿和收藏数量均来自HTTP；广场、统计、我的复用矢量底部导航，主入口切换替换栈顶。
 - 十个 Navigation 业务页面包括失物广场、拍照找物、线索详情、相似线索对比、三步发布/编辑、我的校园、互助统计、统计启事明细、申请表单和认领与线索中心。
@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-mock.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1
 # HTTP 回归：54 项（48 个子测试及 6 个父测试）
 & 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\server.test.cjs .\mock\workflow.test.cjs .\mock\experience.test.cjs .\mock\audit.test.cjs .\mock\management.test.cjs .\mock\recovery.test.cjs
-# 直接加载 ArkTS 接口校验与状态模型：21 项（含 3 个父测试）
+# 直接加载 ArkTS 接口校验、状态模型和招领建议：22 项（含 3 个父测试）
 & 'E:\DevEco Studio\tools\node\node.exe' --test .\mock\native-model.test.cjs
 ```
 
@@ -61,7 +61,7 @@ Previewer连接 `http://127.0.0.1:4524`。其他设备需另行配置端口映�
 - 媒体上传需要服务端 FFmpeg（包含 H.264 编码器），可放入 PATH 或通过 `CAMPUS_FFMPEG` 指定可执行文件。每条招领启事可附一张照片或一段短视频，视频保留前 15 秒画面，去除音轨并转换为 MP4。
 - 启动 Mock 前在服务端环境设置 `CAMPUS_VISION_API_KEY` 与 `CAMPUS_VISION_MODEL`。可选设置 `CAMPUS_VISION_BASE_URL`，默认 `https://api.openai.com/v1`。服务必须兼容 Chat Completions 的图片输入与 JSON 输出，密钥只由服务端使用。模型会接收处理后的照片或视频画面。 [图片输入参考](https://developers.openai.com/api/docs/guides/images-vision)
 - 未配置模型时，招领附件仍可上传，分类由用户选择，广场仍可使用关键词搜索。发布附件保存在本机的 `mock/runtime/media`，查找用照片处理后丢弃。课堂演示请使用虚构样图。 [HarmonyOS 系统相机参考](https://developer.huawei.com/consumer/en/doc/harmonyos-references/js-apis-camerapicker/)
-- 使用 `node --test mock/vision.test.cjs` 跑媒体专项。本轮共 81 项通过，含 6 项媒体与视觉接口测试。专项以真实 FFmpeg 和本机视觉服务替身覆盖短视频抽帧、附件持久化、发布重试、范围读取、照片匹配和视觉服务失败回退。HAP 和 PreviewBuild 构建成功，原生预览已核对两个入口。真实视觉服务仍需配置后联调，相机、相册和视频播放需在支持这些能力的设备上复验。
+- 使用 `node --test mock/vision.test.cjs` 跑媒体专项。全量共 82 项，含 6 项媒体与视觉接口测试及 1 项招领建议测试。专项以真实 FFmpeg 和本机视觉服务替身覆盖短视频抽帧、附件持久化、发布重试、范围读取、照片匹配和视觉服务失败回退。真实视觉服务仍需配置后联调，相机、相册和视频播放需在支持这些能力的设备上复验。
 
 ## 双角色演示
 

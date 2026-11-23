@@ -2,6 +2,14 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createApp } = require('./server.cjs');
 const { loadEts } = require('./ets-test-loader.cjs');
+
+test('AI 招领建议仅使用识别出的物品名和外观', () => {
+  const { suggestFoundNotice } = loadEts('model/RecognitionDraft.ets');
+  const suggestion = suggestFoundNotice({ category: '生活用品', object: '保温杯', features: [' 绿色 ', '白色贴纸'] });
+  assert.equal(suggestion.title, '拾到保温杯');
+  assert.equal(suggestion.description, '拾到一件保温杯，可见外观：绿色、白色贴纸。');
+  assert.equal(suggestFoundNotice({ category: '生活用品', object: '水杯', features: [] }).description, '');
+});
 const { ResponseGuard: guard } = loadEts('service/ResponseGuard.ets');
 
 test('原生响应校验器：真实服务契约与损坏结构', async t => {

@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { CATEGORIES, PublishInput } from '../model/Models';
+import { DraftSuggestion, suggestFoundNotice } from '../model/RecognitionDraft';
 import { Api } from '../service/Api';
 import { MediaPicker } from '../service/MediaPicker';
 import { categoryArt, Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
@@ -25,6 +26,7 @@ export struct PublishPage {
   @Local mediaStatus: string = '';
   @Local analyzeMedia: boolean = true;
   @Local uploading: boolean = false;
+  @Local suggestion: DraftSuggestion | null = null;
   private itemId: string = '';
   private requestId: string = 'draft-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   private stack: NavPathStack = new NavPathStack();
@@ -79,6 +81,20 @@ export struct PublishPage {
     this.mediaId = '';
     this.mediaType = '';
     this.mediaStatus = '';
+    this.suggestion = null;
+  }
+  applySuggestion(): void {
+    if (this.kind !== 'found' || this.suggestion === null || this.busy) { return; }
+    if (!this.title.trim()) {
+      this.title = this.suggestion.title;
+      this.clearIssue('title');
+    }
+    if (!this.description.trim() && this.suggestion.description.length) {
+      this.description = this.suggestion.description;
+      this.clearIssue('description');
+    }
+    this.suggestion = null;
+    this.mediaStatus = '已将建议填入空白字段，请核对后再发布。';
   }
   async upload(video: boolean, fromAlbum: boolean): Promise<void> {
     if (this.busy) { return; }
@@ -92,8 +108,10 @@ export struct PublishPage {
       if (!this.active) { return; }
       this.mediaId = result.id;
       this.mediaType = result.type;
+      this.suggestion = null;
       if (result.analysisStatus === 'recognized' && result.recognition !== null) {
         this.category = result.recognition.category;
+        this.suggestion = suggestFoundNotice(result.recognition);
         this.mediaStatus = '识别为「' + result.recognition.object + '」，已填写分类，可以修改。';
       } else {
         this.mediaStatus = result.analysisStatus === 'skipped' ? '' : '已上传附件，未能自动分类，请核对下方分类。';
@@ -228,6 +246,19 @@ export struct PublishPage {
         }.width('100%')
       }
       if (this.mediaStatus.length) { Text(this.mediaStatus).fontSize(12).fontColor(Colors.ink).width('100%') }
+      if (this.suggestion !== null && (!this.title.trim() || (!this.description.trim() && this.suggestion.description.length))) {
+        Column({ space: 5 }) {
+          Text('AI 填写建议').fontSize(13).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+          if (!this.title.trim()) {
+            Text(this.suggestion.title).fontSize(13).fontColor(Colors.ink).width('100%')
+          }
+          if (!this.description.trim() && this.suggestion.description.length) {
+            Text(this.suggestion.description).fontSize(12).fontColor(Colors.muted).width('100%')
+          }
+          Button('填入空白字段').fontSize(13).fontColor(Colors.green).backgroundColor(Colors.soft)
+            .width('100%').constraintSize({ minHeight: 42 }).onClick(() => this.applySuggestion())
+        }.width('100%').padding(10).borderRadius(10).backgroundColor(Colors.surface)
+      }
     }.width('100%').padding(12).borderRadius(14).backgroundColor(Colors.soft)
   }
   @Builder
