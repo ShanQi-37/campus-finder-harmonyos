@@ -1,5 +1,5 @@
 import { FeedContent } from '../components/FeedContent';
-import { Colors, PageHeader, statusText } from '../components/Common';
+import { Colors, PageHeader, statusText, AmbientBackground } from '../components/Common';
 import { FeedModel } from '../model/FeedModel';
 import { StatisticsScope } from '../model/Models';
 
@@ -28,7 +28,9 @@ export struct StatisticsItemsPage {
 
   build() {
     NavDestination() {
-      Column({ space: 10 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 10 }) {
         PageHeader({ title: this.scope.dateType === 'resolved' ? '确认寻回明细' : '统计启事明细',
           subtitle: this.scope.dateType === 'resolved' ? '按实际确认寻回日期筛选' : '按发布日期筛选', back: true,
           onBack: () => { this.stack.pop(); } })
@@ -36,7 +38,8 @@ export struct StatisticsItemsPage {
         FeedContent({ model: this.model, filters: false,
           showPublishedDate: this.scope.dateType !== 'resolved', showResolvedDate: this.scope.dateType === 'resolved',
           onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } }).layoutWeight(1)
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
       this.scope = context.pathInfo.param as StatisticsScope;

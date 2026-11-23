@@ -1,5 +1,5 @@
 import { CategoryChart } from '../components/Charts';
-import { Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
+import { Colors, PageHeader, SegmentTab, StatePanel, AmbientBackground } from '../components/Common';
 import { CountPoint, PhotoFunnel } from '../model/Models';
 import { Api } from '../service/Api';
 
@@ -40,7 +40,9 @@ export struct PhotoFunnelPage {
 
   build() {
     NavDestination() {
-      Column({ space: 10 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 10 }) {
         PageHeader({ title: '拍照找物统计', back: true, onBack: () => { this.stack.pop(); } })
         Row({ space: 4 }) {
           ForEach([7, 14, 30], (days: number) => {
@@ -67,7 +69,8 @@ export struct PhotoFunnelPage {
           StatePanel({ phase: this.phase, error: this.error, emptyText: '这段时间还没有完成识别的拍照查找',
             emptyAction: '刷新统计', onRetry: () => { this.load(); } }).layoutWeight(1)
         }
-      }.width('100%').height('100%').padding({ left: 16, right: 16 }).backgroundColor(Colors.paper)
+        }.width('100%').height('100%').padding({ left: 16, right: 16 })
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
     }).onShown(() => { this.load(); }).onHidden(() => { this.generation++; })

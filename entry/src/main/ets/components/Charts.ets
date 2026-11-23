@@ -24,8 +24,11 @@ export struct CategoryChart {
               .fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.green)
           }.width('100%')
           Stack({ alignContent: Alignment.Start }) {
-            Rect().width('100%').height(12).fill('#EAF0E6').radius(6)
-            Rect().width((point.count / this.maxCount() * 100) + '%').height(12).fill(this.selected === point.label ? Colors.gold : '#62937A').radius(6)
+            Rect().width('100%').height(12).fill(Colors.soft).radius(6)
+            Rect().width((point.count / this.maxCount() * 100) + '%').height(12).radius(6)
+              .linearGradient({ angle: 90, colors: this.selected === point.label ?
+                [[Colors.gold, 0.0], ['#E9A92E', 1.0]] :
+                [[Colors.green, 0.0], [Colors.greenDeep, 1.0]] })
           }.width('100%').height(12)
         }.width('100%').onClick(() => {
           this.selected = point.label;
@@ -82,9 +85,9 @@ export struct TrendChart {
       }.width('100%')
       Column({ space: 4 }) {
         Text((this.recovery ? '━ 实际确认寻回 ' : '━ 有效启事 ') +
-          this.points.reduce((sum: number, point: TrendPoint) => sum + point.count, 0)).fontSize(11).fontColor('#31654C')
+          this.points.reduce((sum: number, point: TrendPoint) => sum + point.count, 0)).fontSize(11).fontColor(Colors.greenDeep)
         if (!this.recovery) {
-          Text('━ 其中已寻回 ' + this.points.reduce((sum: number, point: TrendPoint) => sum + point.resolved, 0)).fontSize(11).fontColor('#8D5917')
+          Text('━ 其中已寻回 ' + this.points.reduce((sum: number, point: TrendPoint) => sum + point.resolved, 0)).fontSize(11).fontColor(Colors.goldInk)
         }
       }.width('100%').alignItems(HorizontalAlign.Start)
       Stack({ alignContent: Alignment.TopStart }) {
@@ -92,15 +95,17 @@ export struct TrendChart {
         if (this.points.length > 0) {
           Divider().vertical(true).height(90).color('#C4D4C5').position({ x: this.dateX(this.dayIndex()), y: 20 })
         }
-        Polyline().points(this.coordinates(false)).stroke('#447C60').strokeWidth(4).fillOpacity(0).width('100%').height(120)
+        Polyline().points(this.coordinates(false)).stroke(Colors.greenDeep).strokeWidth(4).fillOpacity(0)
+          .strokeLineCap(LineCapStyle.Round).strokeLineJoin(LineJoinStyle.Round).width('100%').height(120)
         if (!this.recovery) {
-          Polyline().points(this.coordinates(true)).stroke('#B57C2B').strokeWidth(2).fillOpacity(0).width('100%').height(120)
+          Polyline().points(this.coordinates(true)).stroke(Colors.gold).strokeWidth(2).fillOpacity(0)
+            .strokeLineCap(LineCapStyle.Round).strokeLineJoin(LineJoinStyle.Round).width('100%').height(120)
         }
         if (this.points.length > 0) {
-          Circle().width(10).height(10).fill('#447C60')
+          Circle().width(10).height(10).fill(Colors.greenDeep)
             .position({ x: this.dateX(this.dayIndex()) - 5, y: this.countY(this.points[this.dayIndex()].count, this.maxCount()) - 5 })
           if (!this.recovery) {
-            Circle().width(5).height(5).fill('#B57C2B')
+            Circle().width(5).height(5).fill(Colors.gold)
               .position({ x: this.dateX(this.dayIndex()) - 2.5, y: this.countY(this.points[this.dayIndex()].resolved, this.maxCount()) - 2.5 })
           }
         }
@@ -132,11 +137,11 @@ export struct TrendChart {
             .fontSize(12).fontColor(Colors.ink).width('100%')
           if (this.points.length > 1) {
             Slider({ value: this.dayIndex() + 1, min: 1, max: this.points.length, step: 1 })
-              .selectedColor('#447C60').width('100%').height(44)
+              .selectedColor(Colors.greenDeep).width('100%').height(44)
               .accessibilityText(this.recovery ? '选择确认寻回日期' : '选择发布日期').accessibilityDescription(this.points[this.dayIndex()].label)
               .onChange((value: number) => this.onSelectDay(Math.round(value)))
           }
-        }.width('100%').backgroundColor('#F1F5EF').borderRadius(12).padding({ left: 12, right: 12, top: 8, bottom: 3 })
+        }.width('100%').backgroundColor(Colors.greenSoft).borderRadius(12).padding({ left: 12, right: 12, top: 8, bottom: 3 })
       }
       Text(this.recovery ? '横轴为发布者实际确认寻回的上海日期。' : '横轴为发布日期。已寻回按启事当前状态统计。')
         .fontSize(11).fontColor(Colors.muted).width('100%')
@@ -144,7 +149,7 @@ export struct TrendChart {
         Text(this.undatedResolved > 0 ?
           '另有 ' + this.undatedResolved + ' 条已寻回旧记录缺少可靠确认日期，仍计入寻回总览，不计入本趋势与单日明细。' :
           '仅统计具有可靠确认时间或交接动态的记录。')
-          .fontSize(11).fontColor(this.undatedResolved > 0 ? '#8D5917' : Colors.muted).lineHeight(17).width('100%')
+          .fontSize(11).fontColor(this.undatedResolved > 0 ? Colors.goldInk : Colors.muted).lineHeight(17).width('100%')
       }
     }.width('100%').padding(16).backgroundColor(Colors.surface).borderRadius(16)
       .border({ width: 1, color: Colors.stroke })
@@ -159,7 +164,7 @@ export struct RecoveryChart {
       Row({ space: 15 }) {
         Stack() {
           DataPanel({ values: [this.data.resolved], max: Math.max(1, this.data.total), type: DataPanelType.Circle })
-            .width(112).height(112).valueColors(['#447C60']).trackBackgroundColor('#EAF0E6').strokeWidth(10).closeEffect(true)
+            .width(112).height(112).valueColors([Colors.greenDeep]).trackBackgroundColor(Colors.soft).strokeWidth(10).closeEffect(true)
           Column({ space: 3 }) {
             Text(this.data.recoveryRate + '%').fontSize(28).fontWeight(FontWeight.Bold).fontColor(Colors.green)
           }

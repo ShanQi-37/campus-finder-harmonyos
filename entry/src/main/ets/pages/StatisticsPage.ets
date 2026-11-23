@@ -1,6 +1,6 @@
 import { CATEGORY_OPTIONS, CATEGORIES, CountPoint, Statistics, StatisticsScope, TrendPoint, emptyStatistics } from '../model/Models';
 import { Api } from '../service/Api';
-import { Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
+import { Colors, PageHeader, SegmentTab, StatePanel, AmbientBackground } from '../components/Common';
 import { BottomNav } from '../components/BottomNav';
 import { CategoryChart, RecoveryChart, TrendChart } from '../components/Charts';
 
@@ -134,8 +134,8 @@ export struct StatisticsPage {
             StatisticsMetric({ label: '待寻回', value: this.data.open, onOpen: () => this.openItems('open') })
           }
         }.width('100%').height(65).columnsTemplate('1fr 1fr 1fr').rowsTemplate('1fr')
-          .backgroundColor(Colors.surface).borderRadius(14).clip(true)
-          .border({ width: 1, color: Colors.stroke })
+          .backgroundColor(Colors.glass).borderRadius(14).clip(true)
+          .backdropBlur(20).border({ width: 1, color: Colors.glassStroke })
         Column({ space: 4 }) {
           Row({ space: 4 }) {
             SegmentTab({ label: '寻回进度', selected: this.chart === 'overview',
@@ -177,7 +177,9 @@ export struct StatisticsPage {
   }
   build() {
     NavDestination() {
-      Column({ space: 8 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 8 }) {
         PageHeader({ title: '校园互助统计', subtitle: '启事发布与寻回数据', back: true, onBack: () => { this.stack.pop(); } })
         this.controls()
         Row() {
@@ -197,7 +199,8 @@ export struct StatisticsPage {
             onRetry: () => this.retry() }).layoutWeight(1)
         } else { this.dashboard() }
         BottomNav({ active: 'Statistics', onNavigate: (route: string) => this.navigate(route) })
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; }).onShown(() => { this.load(); })
   }
 }

@@ -1,4 +1,4 @@
-import { Colors, NoticeStatus, PageHeader, StatePanel, categoryArt } from '../components/Common';
+import { Colors, ItemThumb, NoticeStatus, PageHeader, StatePanel, categoryArt, AmbientBackground } from '../components/Common';
 import { Item, MatchSelection, emptyItem } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
@@ -44,8 +44,7 @@ export struct MatchComparePage {
     Column({ space: 6 }) {
       Text(label + ' · ' + (item.kind === 'found' ? '招领' : '寻物')).fontSize(12)
         .fontColor(Colors.muted).width('100%')
-      Image(categoryArt(item.category)).width(44).height(44).objectFit(ImageFit.Contain)
-        .backgroundColor(item.kind === 'found' ? '#EAF2E6' : '#FBF0D9').borderRadius(10).accessibilityLevel('no')
+      ItemThumb({ item: item, w: 44, h: 44, radius: 10 })
       Text(item.title).fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
         .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
       NoticeStatus({ status: item.status })
@@ -97,7 +96,9 @@ export struct MatchComparePage {
 
   build() {
     NavDestination() {
-      Column({ space: 10 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 10 }) {
         PageHeader({ title: '相似线索对比', back: true, onBack: () => { this.stack.pop(); } })
         if (this.phase === 'ready') {
           Scroll() {
@@ -130,7 +131,8 @@ export struct MatchComparePage {
           StatePanel({ phase: this.phase, error: this.error, emptyText: '这条线索已不在匹配列表中',
             onRetry: () => { this.load(); } }).layoutWeight(1)
         }
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
       this.selection = context.pathInfo.param as MatchSelection;

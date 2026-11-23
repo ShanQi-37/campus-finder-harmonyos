@@ -1,6 +1,6 @@
 import { Item, ClaimInput, PhotoCandidate, emptyItem } from '../model/Models';
 import { Api } from '../service/Api';
-import { categoryArt, Colors, PageHeader, StatePanel } from '../components/Common';
+import { categoryArt, Colors, ItemThumb, PageHeader, StatePanel, AmbientBackground, Shadow } from '../components/Common';
 
 @ComponentV2
 export struct ClaimFormPage {
@@ -79,8 +79,7 @@ export struct ClaimFormPage {
   @Builder
   itemSummary() {
     Row({ space: 10 }) {
-      Image(categoryArt(this.item.category)).width(59).height(64).objectFit(ImageFit.Contain)
-        .backgroundColor(Colors.soft).borderRadius(12).accessibilityLevel('no')
+      ItemThumb({ item: this.item, w: 59, h: 64, radius: 12 })
       Column({ space: 5 }) {
         Text(this.item.kind === 'found' ? '招领启事' : '寻物启事').fontSize(11).fontColor(Colors.muted)
         Text(this.item.title).fontSize(17).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(2)
@@ -88,8 +87,9 @@ export struct ClaimFormPage {
         Text(this.item.location).fontSize(12).fontColor(Colors.muted).maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-    }.width('100%').padding(11).backgroundColor(Colors.surface).borderRadius(15)
-      .border({ width: 1, color: Colors.stroke })
+    }.width('100%').padding(11).backgroundColor(Colors.glass).borderRadius(15)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
   }
 
   @Builder
@@ -116,13 +116,16 @@ export struct ClaimFormPage {
         .maxLength(60).backgroundColor(Colors.paper).borderRadius(10).enterKeyType(EnterKeyType.Done)
         .border({ width: 1, color: this.issue === 'contact' ? Colors.red : Colors.stroke })
         .accessibilityText('联系指引').onChange((value: string) => { this.contact = value; this.clearIssue('contact'); })
-    }.width('100%').padding(14).backgroundColor(Colors.surface).borderRadius(15)
-      .border({ width: 1, color: Colors.stroke })
+    }.width('100%').padding(14).backgroundColor(Colors.glass).borderRadius(15)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
   }
 
   build() {
     NavDestination() {
-      Column({ space: 8 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 8 }) {
         PageHeader({ title: this.phase !== 'ready' ? '申请与核对' : (this.item.kind === 'found' ? '申请认领' : '提供线索'),
           back: true, onBack: () => this.back() })
         if (this.phase !== 'ready') {
@@ -142,12 +145,14 @@ export struct ClaimFormPage {
           Column({ space: 7 }) {
             if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('100%') }
             Button(this.busy ? '正在提交…' : (this.item.kind === 'found' ? '提交认领申请' : '提交寻物线索'))
-              .constraintSize({ minHeight: 46 }).fontSize(14).fontWeight(FontWeight.Bold).width('100%').backgroundColor(Colors.green)
+              .constraintSize({ minHeight: 46 }).fontSize(14).fontWeight(FontWeight.Bold).width('100%')
+              .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
               .enabled(!this.busy).onClick(() => { this.submit(); })
           }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 }).backgroundColor(Colors.surface)
             .border({ width: { top: 1 }, color: Colors.stroke })
         }
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
       const param = context.pathInfo.param as string | PhotoCandidate;

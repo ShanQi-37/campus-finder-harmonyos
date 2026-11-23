@@ -1,6 +1,6 @@
 import { FeedModel } from '../model/FeedModel';
 import { Api } from '../service/Api';
-import { Colors, PageHeader } from '../components/Common';
+import { Colors, FontSize, Radius, Shadow, Spacing, PageHeader, AmbientBackground } from '../components/Common';
 import { BottomNav } from '../components/BottomNav';
 import { FeedContent } from '../components/FeedContent';
 import { DetailPage } from './DetailPage';
@@ -48,26 +48,38 @@ struct Index {
   }
   build() {
     Navigation(this.stack) {
-      Column({ space: 8 }) {
-        PageHeader({ title: '拾光校园', subtitle: '校园失物招领' })
-        Column() {
-          Row() {
-            Column({ space: 5 }) {
-              Text('失物广场').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-              Text(this.headline).fontSize(12).fontColor('#D9EDE2').maxLines(2)
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Image($r('app.media.campus_hero')).width(86).height(70).objectFit(ImageFit.Contain).accessibilityLevel('no')
-          }.width('100%').height(80).padding({ left: 15, right: 8 }).backgroundColor('#134E45').borderRadius(16)
-        }.width('100%').padding({ left: 16, right: 16 })
-        Row({ space: 8 }) {
-          Button('描述找物 ›').fontSize(13).constraintSize({ minHeight: 40 }).fontColor(Colors.green)
-            .backgroundColor(Colors.soft).onClick(() => this.open('TextSearch'))
-          Button('拍照找物 ›').fontSize(13).constraintSize({ minHeight: 40 }).fontColor(Colors.green)
-            .backgroundColor(Colors.soft).onClick(() => this.open('PhotoSearch'))
-        }.width('100%').padding({ left: 16, right: 16 }).justifyContent(FlexAlign.End)
-        FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id), onRefresh: () => { this.refreshHeadline(); } }).layoutWeight(1)
-        BottomNav({ active: 'Home', onNavigate: (route: string) => { if (route === 'Home') { this.refresh(); } else { this.open(route); } } })
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+      Stack() {
+        AmbientBackground()
+        Column({ space: Spacing.sm }) {
+          PageHeader({ title: '拾光校园', subtitle: '校园失物招领' })
+          Column() {
+            Stack({ alignContent: Alignment.Center }) {
+              Row() {
+                Column({ space: 5 }) {
+                  Text('失物广场').fontSize(FontSize.heading).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+                  Text(this.headline).fontSize(FontSize.caption).fontColor('#D9F2E8').maxLines(2)
+                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                Image($r('app.media.campus_hero')).width(86).height(70).objectFit(ImageFit.Contain).accessibilityLevel('no')
+              }.width('100%').height(84).padding({ left: Spacing.lg, right: Spacing.sm })
+              // 装饰柔光：与背景光斑呼应，让 hero 不再单调
+              Circle().width(120).height(120).fill('#1FFFFFFF').blur(18)
+                .position({ x: -30, y: -18 }).accessibilityLevel('no')
+              Circle().width(90).height(90).fill('#14FFFFFF').blur(14)
+                .position({ x: 150, y: 38 }).accessibilityLevel('no')
+            }.width('100%').borderRadius(Radius.lg)
+            .linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+            .shadow({ radius: 12, color: Shadow.md, offsetX: 0, offsetY: 4 }).clip(true)
+          }.width('100%').padding({ left: Spacing.lg, right: Spacing.lg })
+          Row({ space: Spacing.sm }) {
+            Button('描述找物 ›').fontSize(FontSize.caption).constraintSize({ minHeight: 40 }).fontColor(Colors.greenDeep)
+              .backgroundColor(Colors.soft).borderRadius(Radius.sm).onClick(() => this.open('TextSearch'))
+            Button('拍照找物 ›').fontSize(FontSize.caption).constraintSize({ minHeight: 40 }).fontColor(Colors.greenDeep)
+              .backgroundColor(Colors.soft).borderRadius(Radius.sm).onClick(() => this.open('PhotoSearch'))
+          }.width('100%').padding({ left: Spacing.lg, right: Spacing.lg }).justifyContent(FlexAlign.End)
+          FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id), onRefresh: () => { this.refreshHeadline(); } }).layoutWeight(1)
+          BottomNav({ active: 'Home', onNavigate: (route: string) => { if (route === 'Home') { this.refresh(); } else { this.open(route); } } })
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).navDestination(this.destination).mode(NavigationMode.Stack)
       .onNavBarStateChange((visible: boolean) => { if (visible) { this.refresh(); } })
   }

@@ -1,6 +1,6 @@
 import { Claim } from '../model/Models';
 import { Api } from '../service/Api';
-import { categoryArt, claimColor, claimText, Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
+import { categoryArt, claimColor, claimText, Colors, PageHeader, SegmentTab, StatePanel, AmbientBackground, Shadow } from '../components/Common';
 
 @ComponentV2
 export struct ClaimCenterPage {
@@ -88,10 +88,10 @@ export struct ClaimCenterPage {
   }
 
   statusFill(status: string): string {
-    if (status === 'accepted') { return Colors.soft; }
-    if (status === 'rejected') { return '#FAEBE7'; }
+    if (status === 'accepted') { return Colors.greenSoft; }
+    if (status === 'rejected') { return Colors.redSoft; }
     if (status === 'cancelled') { return Colors.paper; }
-    return '#FCF0D8';
+    return Colors.goldSoft;
   }
 
   guidanceTitle(status: string): string {
@@ -156,7 +156,7 @@ export struct ClaimCenterPage {
           Text(claim.kind === 'found' ? '认领申请' : '寻物线索').fontSize(11).fontColor(Colors.muted)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Text(claimText(claim.status)).fontSize(11).fontWeight(FontWeight.Bold)
-          .fontColor(claim.status === 'pending' ? '#77531C' : claimColor(claim.status))
+          .fontColor(claim.status === 'pending' ? Colors.goldInk : claimColor(claim.status))
           .backgroundColor(this.statusFill(claim.status)).padding({ left: 7, right: 7, top: 4, bottom: 4 }).borderRadius(8)
       }.width('100%')
       Text((this.boxDirection === 'received' ? '申请人  ' + claim.senderName : '发布者  ' + claim.ownerName))
@@ -184,23 +184,27 @@ export struct ClaimCenterPage {
       if (claim.status === 'pending') {
         if (this.boxDirection === 'received') {
           Row({ space: 8 }) {
-            Button('不通过').constraintSize({ minHeight: 43 }).fontSize(13).fontColor(Colors.red).backgroundColor('#FAEBE7')
+            Button('不通过').constraintSize({ minHeight: 43 }).fontSize(13).fontColor(Colors.red).backgroundColor(Colors.redSoft)
               .layoutWeight(1).onClick(() => this.confirm(claim, 'reject'))
-            Button('确认寻回').constraintSize({ minHeight: 43 }).fontSize(13).fontWeight(FontWeight.Bold).backgroundColor(Colors.green)
+            Button('确认寻回').constraintSize({ minHeight: 43 }).fontSize(13).fontWeight(FontWeight.Bold)
+              .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
               .layoutWeight(2).onClick(() => this.confirm(claim, 'accept'))
           }.width('100%')
         } else {
           Button('取消申请').constraintSize({ minHeight: 42 }).width('100%').fontSize(13).fontColor(Colors.red)
-            .backgroundColor('#FAEBE7').onClick(() => this.confirm(claim, 'cancel'))
+            .backgroundColor(Colors.redSoft).onClick(() => this.confirm(claim, 'cancel'))
         }
       }
-    }.padding(13).width('100%').backgroundColor(Colors.surface).borderRadius(16)
-      .border({ width: 1, color: Colors.stroke })
+    }.padding(13).width('100%').backgroundColor(Colors.glass).borderRadius(16)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
   }
 
   build() {
     NavDestination() {
-      Column({ space: 8 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 8 }) {
         PageHeader({ title: '认领与线索', back: true, onBack: () => this.back() })
         this.controls()
         if (this.phase !== 'ready') {
@@ -219,7 +223,8 @@ export struct ClaimCenterPage {
           }.layoutWeight(1).padding({ left: 16, right: 16, bottom: 16 }).width('100%')
             .enabled(!this.busy).scrollBar(BarState.Auto)
         }
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
       const destination = context.pathInfo.param as string;

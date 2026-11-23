@@ -1,4 +1,4 @@
-import { Colors, ItemCard, PageHeader, StatePanel } from '../components/Common';
+import { Colors, ItemCard, PageHeader, StatePanel, AmbientBackground, Shadow } from '../components/Common';
 import { CATEGORIES, CATEGORY_OPTIONS, Item, SearchCriteria } from '../model/Models';
 import { FoundSearchModel } from '../model/FoundSearchModel';
 import { Api } from '../service/Api';
@@ -100,13 +100,17 @@ export struct TextSearchPage {
         .backgroundColor(Colors.green).onClick(() => this.submit())
       if (this.hint) { Text(this.hint).fontSize(13).fontColor(Colors.green).width('100%') }
       if (this.error) { Text(this.error).fontSize(13).fontColor(Colors.red).width('100%') }
-    }.padding(14).width('100%').borderRadius(16).backgroundColor(Colors.surface)
+    }.padding(14).width('100%').borderRadius(16).backgroundColor(Colors.glass)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
       .enabled(!this.interpreting && this.model.phase !== 'loading')
   }
 
   build() {
     NavDestination() {
-      Column({ space: 8 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 8 }) {
         PageHeader({ title: '描述找物', back: true, onBack: () => { this.stack.pop(); } })
         Scroll() {
           Column({ space: 12 }) {
@@ -132,7 +136,8 @@ export struct TextSearchPage {
             }
           }.width('100%').padding({ left: 16, right: 16, bottom: 16 })
         }.layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
     }).onShown(() => { this.model.refresh(); }).onDisAppear(() => { this.generation++; this.model.clear(); })

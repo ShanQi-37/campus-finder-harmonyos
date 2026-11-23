@@ -1,4 +1,4 @@
-import { Colors } from './Common';
+import { Colors, FontSize, Radius, Shadow, Spacing } from './Common';
 @ComponentV2
 struct NavGlyph {
   @Param route: string = 'Home';
@@ -24,10 +24,13 @@ export struct BottomNav {
   tab(label: string, route: string) {
     Column({ space: 3 }) {
       Stack() {
-        NavGlyph({ route: route, tint: this.active === route ? Colors.green : Colors.muted })
-      }.width(49).height(28).borderRadius(14).backgroundColor(this.active === route ? Colors.soft : '#00000000')
+        NavGlyph({ route: route, tint: this.active === route ? Colors.green : Colors.faint })
+      }.width(49).height(28).borderRadius(Radius.sm).backgroundColor(this.active === route ? Colors.soft : '#00000000')
+      .scale({ x: this.active === route ? 1.06 : 1.0, y: this.active === route ? 1.06 : 1.0 })
+      .translate({ y: this.active === route ? -2 : 0 })
+      .animation({ duration: 180, curve: Curve.EaseOut })
       Text(label).fontSize(11).fontWeight(this.active === route ? FontWeight.Bold : FontWeight.Medium)
-        .fontColor(this.active === route ? Colors.green : Colors.muted)
+        .fontColor(this.active === route ? Colors.greenDeep : Colors.faint)
     }.layoutWeight(1).constraintSize({ minHeight: 50 }).justifyContent(FlexAlign.Center).onClick(() => this.onNavigate(route))
       .accessibilityText(label).accessibilitySelected(this.active === route)
   }
@@ -37,11 +40,13 @@ export struct BottomNav {
       this.tab('统计', 'Statistics')
       Row({ space: 2 }) {
         NavGlyph({ route: 'Publish', tint: '#FFFFFF' }).accessibilityLevel('no')
-        Text('发布').fontSize(12).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-      }.layoutWeight(1).constraintSize({ minHeight: 44 }).backgroundColor(Colors.green).borderRadius(14)
+        Text('发布').fontSize(FontSize.caption).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+      }.layoutWeight(1).constraintSize({ minHeight: 44 }).borderRadius(Radius.md)
+        .linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+        .shadow({ radius: 8, color: Shadow.md, offsetX: 0, offsetY: 3 })
         .justifyContent(FlexAlign.Center).onClick(() => this.onNavigate('Publish')).accessibilityText('发布启事')
       this.tab('我的', 'My')
-    }.width('100%').padding({ left: 12, right: 12, top: 5, bottom: 7 })
+    }.width('100%').padding({ left: Spacing.md, right: Spacing.md, top: 5, bottom: 7 })
       .backgroundColor(Colors.surface).border({ width: { top: 1 }, color: Colors.stroke })
   }
 }

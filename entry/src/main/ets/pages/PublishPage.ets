@@ -3,7 +3,7 @@ import { CATEGORIES, PublishInput } from '../model/Models';
 import { DraftSuggestion, suggestFoundNotice } from '../model/RecognitionDraft';
 import { Api } from '../service/Api';
 import { MediaPicker } from '../service/MediaPicker';
-import { categoryArt, Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
+import { categoryArt, Colors, PageHeader, SegmentTab, StatePanel, AmbientBackground, Shadow } from '../components/Common';
 @ComponentV2
 export struct PublishPage {
   @Local kind: string = 'lost';
@@ -299,8 +299,9 @@ export struct PublishPage {
         Button('填入虚构示例').height(39).fontSize(12).fontColor(Colors.green)
           .backgroundColor(Colors.soft).onClick(() => this.offerExample())
       }
-    }.width('100%').padding(14).alignItems(HorizontalAlign.Start).backgroundColor(Colors.surface)
-      .borderRadius(16).border({ width: 1, color: Colors.stroke })
+    }.width('100%').padding(14).alignItems(HorizontalAlign.Start).backgroundColor(Colors.glass)
+      .borderRadius(16).border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
   }
 
   @Builder
@@ -326,10 +327,11 @@ export struct PublishPage {
         .border({ width: 1, color: this.issue === 'date' ? Colors.red : Colors.stroke }).accessibilityText('发生日期')
         .id('publishDate').enterKeyType(EnterKeyType.Done).onSubmit(() => this.next())
         .onChange((value: string) => { this.occurredAt = value; this.clearIssue('date'); })
-    }.width('100%').padding(14).backgroundColor(Colors.surface).borderRadius(16)
-      .border({ width: 1, color: Colors.stroke })
-    Text('请使用虚构演示内容，避免填写完整证件号码或密码。').fontSize(12).fontColor('#77531C')
-      .lineHeight(19).width('100%').padding(12).backgroundColor('#FCF0D8').borderRadius(12)
+    }.width('100%').padding(14).backgroundColor(Colors.glass).borderRadius(16)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+    Text('请使用虚构演示内容，避免填写完整证件号码或密码。').fontSize(12).fontColor(Colors.goldInk)
+      .lineHeight(19).width('100%').padding(12).backgroundColor(Colors.goldSoft).borderRadius(12)
   }
 
   @Builder
@@ -354,8 +356,9 @@ export struct PublishPage {
         Text(this.mediaType === 'video' ? '随启事发布 1 段短视频' : '随启事发布 1 张照片')
           .fontSize(13).fontColor(Colors.green).width('100%')
       }
-    }.width('100%').padding(14).backgroundColor(Colors.surface).borderRadius(16)
-      .border({ width: 1, color: Colors.stroke })
+    }.width('100%').padding(14).backgroundColor(Colors.glass).borderRadius(16)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
     Column({ space: 6 }) {
       Row() {
         Text('联系指引').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
@@ -369,7 +372,9 @@ export struct PublishPage {
 
   build() {
     NavDestination() {
-      Column({ space: 9 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 9 }) {
         PageHeader({ title: this.editing ? '编辑启事' : '发布启事', back: true, onBack: () => this.back() })
         if (this.phase !== 'ready') {
           StatePanel({ phase: this.phase, error: this.error, onRetry: () => { this.load(); } }).layoutWeight(1)
@@ -409,13 +414,15 @@ export struct PublishPage {
               }
               Button(this.busy ? '正在保存…' : (this.step === 1 ? '下一步 · 补充线索' :
                 (this.step === 2 ? '下一步 · 预览确认' : (this.editing ? '保存修改' : '确认发布'))))
-                .layoutWeight(1).constraintSize({ minHeight: 46 }).fontSize(14).fontWeight(FontWeight.Bold).backgroundColor(Colors.green)
+                .layoutWeight(1).constraintSize({ minHeight: 46 }).fontSize(14).fontWeight(FontWeight.Bold)
+                .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
                 .onClick(() => { if (this.step < 3) { this.next(); } else { this.submit(); } })
             }.width('100%').enabled(!this.busy)
           }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 }).backgroundColor(Colors.surface)
             .border({ width: { top: 1 }, color: Colors.stroke })
         }
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
       this.stack = context.pathStack;
       this.itemId = context.pathInfo.param as string;

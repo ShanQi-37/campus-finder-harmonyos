@@ -2,7 +2,7 @@ import { FeedModel } from '../model/FeedModel';
 import { PersonalSummary, emptySummary } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
-import { Colors, PageHeader, SegmentTab } from '../components/Common';
+import { Colors, PageHeader, SegmentTab, AmbientBackground, Shadow } from '../components/Common';
 import { FeedContent } from '../components/FeedContent';
 import { TaskTile } from '../components/TaskTile';
 import { BottomNav } from '../components/BottomNav';
@@ -86,8 +86,9 @@ export struct MyPage {
         }.width('100%').padding(3).borderRadius(11).backgroundColor(Colors.soft)
         Text('选择虚构身份体验认领和交接。').fontSize(11).fontColor(Colors.muted).width('100%')
       }
-    }.width('100%').padding(11).backgroundColor(Colors.surface).borderRadius(15)
-      .border({ width: 1, color: Colors.stroke })
+    }.width('100%').padding(11).backgroundColor(Colors.glass).borderRadius(15)
+      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
+      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
   }
 
   @Builder
@@ -144,7 +145,9 @@ export struct MyPage {
 
   build() {
     NavDestination() {
-      Column({ space: 8 }) {
+      Stack() {
+        AmbientBackground()
+        Column({ space: 8 }) {
         PageHeader({ title: '我的校园', back: true, onBack: () => { this.stack.clear(); } })
         Column({ space: 8 }) {
           this.profile()
@@ -155,7 +158,8 @@ export struct MyPage {
         FeedContent({ model: this.model, filters: false,
           onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } }).layoutWeight(1)
         BottomNav({ active: 'My', onNavigate: (route: string) => this.navigate(route) })
-      }.width('100%').height('100%').backgroundColor(Colors.paper)
+        }.width('100%').height('100%')
+      }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => { this.stack = context.pathStack; })
       .onShown(() => { this.reload(false); })
   }
