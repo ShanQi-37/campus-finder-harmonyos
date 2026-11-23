@@ -4,6 +4,7 @@ export interface Item {
   owner: string; ownerName: string; status: string; contact: string; contactVisible: boolean;
   occurredAt: string; createdAt: string; updatedAt: string; resolvedAt: string;
   saved: boolean; myPending: boolean; claimCount: number; history: TimelineEvent[];
+  mediaId?: string; mediaType?: string;
 }
 export interface ItemList { items: Item[]; total: number; page: number; pageSize: number; hasMore: boolean; }
 export interface PublicationWindow { start: string; end: string; }
@@ -16,7 +17,7 @@ export interface Statistics {
   undatedResolved: number; days: number; category: string;
   anchor: string; windowStart: string; windowEnd: string; recoveryWindowStart: string; recoveryWindowEnd: string; updatedAt: string;
 }
-export interface PublishInput { title: string; category: string; kind: string; location: string; description: string; contact: string; occurredAt: string; requestId: string; }
+export interface PublishInput { title: string; category: string; kind: string; location: string; description: string; contact: string; occurredAt: string; requestId: string; mediaId?: string; mediaType?: string; }
 export interface ClaimInput { proof: string; contact: string; }
 export interface Claim {
   id: string; itemId: string; itemTitle: string; category: string; kind: string; sender: string; owner: string;
@@ -25,6 +26,9 @@ export interface Claim {
 export interface ClaimList { claims: Claim[]; pending: number; }
 export interface MatchLead { item: Item; reasons: string[]; }
 export interface MatchList { matches: MatchLead[]; }
+export interface Recognition { category: string; object: string; features: string[]; }
+export interface MediaUpload { id: string; type: string; recognition: Recognition | null; analysisStatus: string; }
+export interface PhotoMatches extends MatchList { recognition: Recognition; }
 export interface MatchSelection { sourceId: string; candidateId: string; }
 export interface DraftState { exists: boolean; input: PublishInput | null; updatedAt: string; }
 export interface PersonalSummary { posted: number; open: number; resolved: number; saved: number; incomingPending: number; outgoingPending: number; draftTitle: string; draftUpdatedAt: string; }

@@ -77,3 +77,15 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 `POST /api/draft/discard` 接收已读取或保存草稿的`{requestId,updatedAt}`。服务端仅操作当前身份；版本一致才原子舍弃，返回`{exists:false,input:null,updatedAt:''}`。不存在时幂等成功，不影响已发布启事；版本冲突409，参数无效400，磁盘失败500并回滚。每次草稿保存的updatedAt严格递增，即使同一毫秒连续保存也能区分版本。
 
 `GET /api/claims` 新增status=all/pending/accepted/rejected/cancelled，默认all，继续结合direction=received/sent和当前身份过滤；pending是当前结果内待核对数。客户端任务入口默认pending，空状态可切回全部申请。个人启事复用列表的status筛选；withdrawn仅本人owner列表可见，恢复后退出撤回结果。
+
+## 招领媒体和拍照找物
+
+| 方法 | 路径 | 输入和结果 |
+| --- | --- | --- |
+| POST | `/api/media?type=photo或video&analyze=true或false` | 原始二进制。照片 JPEG/PNG 至多 8 MiB，视频 MP4 至多 24 MiB。返回 `{id,type,recognition,analysisStatus}`，可用状态为 recognized、uncertain、unavailable、failed、skipped。 |
+| GET / HEAD | `/api/item-media/:itemId/:mediaId` | 仅提供可见且正在使用此附件的启事媒体。支持字节范围，撤回后返回 404。 |
+| POST | `/api/media/search` | JPEG/PNG 二进制。返回 `{recognition,matches}`，最多五条其他身份发布的待寻回招领启事。 |
+
+分类结果含 `category`、`object`、`features`。后端限制分类值和特征长度。拍照找物比对识别的名称和特征与候选的标题、描述和已有的识别特征，没有可用候选时返回空列表。联系指引沿用启事的权限规则。
+
+草稿、发布及编辑可用 `mediaId` 引用同一身份上传的附件。明确传空字符串可移除附件。草稿和启事读取时同时返回附件类型 `mediaType`。老记录允许两个字段均缺省。媒体二进制与元数据保存在同一运行目录下。每次上传时清理该身份未被启事或草稿引用的旧附件，保留最近八份。查找用照片只作当次处理。坏格式返回 415，超过大小返回 413，模糊照片或无法解码返回 422，视觉模型调用失败返回 502，缺少配置返回 503。

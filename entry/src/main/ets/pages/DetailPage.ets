@@ -82,6 +82,13 @@ export struct DetailPage {
           Scroll() {
             Column({ space: 14 }) {
               if (this.section === 'info') {
+                if (this.item.mediaType === 'photo' && this.item.mediaId !== undefined && this.item.status !== 'withdrawn') {
+                  Image(Api.mediaUrl(this.item.id, this.item.mediaId)).width('100%').height(220).objectFit(ImageFit.Contain)
+                    .borderRadius(14).backgroundColor(Colors.soft).accessibilityText('物品照片')
+                } else if (this.item.mediaType === 'video' && this.item.mediaId !== undefined && this.item.status !== 'withdrawn') {
+                  Video({ src: Api.mediaUrl(this.item.id, this.item.mediaId) }).width('100%').height(220)
+                    .controls(true).autoPlay(false).objectFit(ImageFit.Contain).backgroundColor(Colors.ink)
+                }
                 Column({ space: 13 }) {
                   Text('地点  ' + this.item.location).fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
                     .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })

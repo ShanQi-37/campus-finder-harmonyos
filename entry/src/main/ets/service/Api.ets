@@ -1,20 +1,21 @@
 import { http } from '@kit.NetworkKit';
-import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, PersonalSummary, PublicationWindow,
+import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary, PhotoMatches, PublicationWindow,
   PublishInput, Statistics } from '../model/Models';
 import { ResponseGuard } from './ResponseGuard';
 import { Session } from '../model/Session';
 interface Envelope<T> { code: number; message: string; data: T; }
 export const BASE_URL: string = 'http://127.0.0.1:4524';
 export class Api {
-  private static async request<T>(path: string, body?: string): Promise<T> {
+  private static async request<T>(path: string, body?: string | ArrayBuffer): Promise<T> {
     const client = http.createHttp();
     let businessMessage: string = '';
     try {
+      const binary = body instanceof ArrayBuffer;
       const response = await client.request(BASE_URL + path, {
         method: body === undefined ? http.RequestMethod.GET : http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json', 'X-Demo-User': Session.actor },
+        header: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-Demo-User': Session.actor },
         extraData: body ?? '', expectDataType: http.HttpDataType.STRING,
-        connectTimeout: 4000, readTimeout: 6000, usingCache: false
+        connectTimeout: 4000, readTimeout: binary ? 100000 : 6000, usingCache: false
       });
       const envelope = JSON.parse(response.result as string) as Envelope<T>;
       if (response.responseCode < 200 || response.responseCode >= 300 || envelope.code !== 0) {
@@ -26,6 +27,19 @@ export class Api {
     } catch (error) {
       throw new Error(businessMessage.length ? businessMessage : '连接失败或数据异常，请检查网络后重试');
     } finally { client.destroy(); }
+  }
+  static async uploadMedia(type: string, bytes: ArrayBuffer, analyze: boolean): Promise<MediaUpload> {
+    const result = await Api.request<MediaUpload>('/api/media?type=' + type + '&analyze=' + analyze, bytes);
+    if (!ResponseGuard.upload(result) || result.type !== type) { throw new Error('附件返回格式异常'); }
+    return result;
+  }
+  static async searchPhoto(bytes: ArrayBuffer): Promise<PhotoMatches> {
+    const result = await Api.request<PhotoMatches>('/api/media/search', bytes);
+    if (!ResponseGuard.photoMatches(result)) { throw new Error('识别结果格式异常'); }
+    return result;
+  }
+  static mediaUrl(itemId: string, mediaId: string): string {
+    return BASE_URL + '/api/item-media/' + encodeURIComponent(itemId) + '/' + encodeURIComponent(mediaId);
   }
   static async list(kind: string, category: string, keyword: string, owner: string = '', status: string = 'all',
     sort: string = 'latest', saved: boolean = false, page: number = 1, window?: PublicationWindow,

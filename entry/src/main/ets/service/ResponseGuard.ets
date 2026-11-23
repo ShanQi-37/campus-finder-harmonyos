@@ -1,9 +1,29 @@
-import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchList, PersonalSummary, PublishInput, Statistics, TrendPoint } from '../model/Models';
+import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary,
+  PhotoMatches, PublishInput, Recognition, Statistics, TrendPoint } from '../model/Models';
 
 // Check every field used by the UI before accepting an untrusted HTTP payload.
 export class ResponseGuard {
   static count(value: number): boolean { return Number.isSafeInteger(value) && value >= 0; }
   static strings(values: string[]): boolean { return values.every((value: string) => typeof value === 'string'); }
+  static attachment(id?: string, type?: string): boolean {
+    return id === undefined ? type === undefined :
+      typeof id === 'string' && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(id) &&
+      (type === 'photo' || type === 'video');
+  }
+  static recognition(value: Recognition | null): boolean {
+    return !!value && CATEGORIES.includes(value.category) && typeof value.object === 'string' &&
+      value.object.length > 0 && value.object.length <= 20 &&
+      Array.isArray(value.features) && value.features.length <= 6 &&
+      value.features.every((feature: string) => typeof feature === 'string' && feature.length <= 20);
+  }
+  static upload(value: MediaUpload): boolean {
+    return !!value && typeof value.id === 'string' && ResponseGuard.attachment(value.id, value.type) &&
+      ['recognized', 'uncertain', 'unavailable', 'failed', 'skipped'].includes(value.analysisStatus) &&
+      (value.analysisStatus !== 'recognized' || ResponseGuard.recognition(value.recognition));
+  }
+  static photoMatches(value: PhotoMatches): boolean {
+    return ResponseGuard.matches(value) && ResponseGuard.recognition(value.recognition);
+  }
   static time(value: string): boolean { return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value)); }
   static date(value: string): boolean {
     return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -11,11 +31,13 @@ export class ResponseGuard {
   static input(input: PublishInput): boolean {
     return !!input && ResponseGuard.strings([input.title, input.location, input.description, input.contact, input.occurredAt, input.requestId]) &&
       input.title.length <= 36 && input.location.length <= 30 && input.description.length <= 300 && input.contact.length <= 60 && input.occurredAt.length <= 10 &&
-      input.requestId.trim().length > 0 && input.requestId.length <= 80 && CATEGORIES.includes(input.category) && ['lost', 'found'].includes(input.kind);
+      input.requestId.trim().length > 0 && input.requestId.length <= 80 && CATEGORIES.includes(input.category) &&
+      ['lost', 'found'].includes(input.kind) && ResponseGuard.attachment(input.mediaId, input.mediaType);
   }
   static item(item: Item): boolean {
     return !!item && ResponseGuard.strings([item.id, item.title, item.category, item.kind, item.location, item.description, item.owner, item.ownerName, item.status, item.contact, item.resolvedAt]) &&
       item.id.length > 0 && CATEGORIES.includes(item.category) && ['lost', 'found'].includes(item.kind) && ['open', 'resolved', 'withdrawn'].includes(item.status) &&
+      ResponseGuard.attachment(item.mediaId, item.mediaType) &&
       ResponseGuard.date(item.occurredAt) && ResponseGuard.time(item.createdAt) && ResponseGuard.time(item.updatedAt) &&
       (item.resolvedAt === '' || ResponseGuard.time(item.resolvedAt)) &&
       typeof item.contactVisible === 'boolean' && typeof item.saved === 'boolean' && typeof item.myPending === 'boolean' && ResponseGuard.count(item.claimCount) &&

@@ -4,6 +4,7 @@ import { Colors, PageHeader } from '../components/Common';
 import { BottomNav } from '../components/BottomNav';
 import { FeedContent } from '../components/FeedContent';
 import { DetailPage } from './DetailPage';
+import { PhotoSearchPage } from './PhotoSearchPage';
 import { MatchComparePage } from './MatchComparePage';
 import { PublishPage } from './PublishPage';
 import { MyPage } from './MyPage';
@@ -32,6 +33,7 @@ struct Index {
   @Builder
   destination(name: string) {
     if (name === 'Detail') { DetailPage() }
+    else if (name === 'PhotoSearch') { PhotoSearchPage() }
     else if (name === 'MatchCompare') { MatchComparePage() }
     else if (name === 'Publish') { PublishPage() }
     else if (name === 'My') { MyPage() }
@@ -53,6 +55,10 @@ struct Index {
             Image($r('app.media.campus_hero')).width(86).height(70).objectFit(ImageFit.Contain).accessibilityLevel('no')
           }.width('100%').height(80).padding({ left: 15, right: 8 }).backgroundColor('#134E45').borderRadius(16)
         }.width('100%').padding({ left: 16, right: 16 })
+        Row() {
+          Button('拍照找物 ›').fontSize(13).constraintSize({ minHeight: 40 }).fontColor(Colors.green)
+            .backgroundColor(Colors.soft).onClick(() => this.open('PhotoSearch'))
+        }.width('100%').padding({ left: 16, right: 16 }).justifyContent(FlexAlign.End)
         FeedContent({ model: this.model, onOpen: (id: string) => this.open('Detail', id), onRefresh: () => { this.refreshHeadline(); } }).layoutWeight(1)
         BottomNav({ active: 'Home', onNavigate: (route: string) => { if (route === 'Home') { this.refresh(); } else { this.open(route); } } })
       }.width('100%').height('100%').backgroundColor(Colors.paper)

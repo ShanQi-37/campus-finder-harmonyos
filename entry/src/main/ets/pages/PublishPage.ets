@@ -1,5 +1,7 @@
+import { common } from '@kit.AbilityKit';
 import { CATEGORIES, PublishInput } from '../model/Models';
 import { Api } from '../service/Api';
+import { MediaPicker } from '../service/MediaPicker';
 import { categoryArt, Colors, PageHeader, SegmentTab, StatePanel } from '../components/Common';
 @ComponentV2
 export struct PublishPage {
@@ -18,6 +20,11 @@ export struct PublishPage {
   @Local phase: string = 'loading';
   @Local editing: boolean = false;
   @Local hasSavedDraft: boolean = false;
+  @Local mediaId: string = '';
+  @Local mediaType: string = '';
+  @Local mediaStatus: string = '';
+  @Local analyzeMedia: boolean = true;
+  @Local uploading: boolean = false;
   private itemId: string = '';
   private requestId: string = 'draft-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   private stack: NavPathStack = new NavPathStack();
@@ -25,7 +32,9 @@ export struct PublishPage {
   private active: boolean = true;
   private baseline: string = '';
   private savedDraftAt: string = '';
-  input(): PublishInput { return { title: this.title, category: this.category, kind: this.kind, location: this.location, description: this.description, contact: this.contact, occurredAt: this.occurredAt, requestId: this.requestId }; }
+  input(): PublishInput { return { title: this.title, category: this.category, kind: this.kind, location: this.location,
+    description: this.description, contact: this.contact, occurredAt: this.occurredAt, requestId: this.requestId,
+    mediaId: this.kind === 'found' ? this.mediaId : '' }; }
   async load(): Promise<void> {
     this.phase = 'loading'; this.error = '';
     try {
@@ -33,12 +42,14 @@ export struct PublishPage {
         const item = await Api.detail(this.itemId); if (!this.active) { return; }
         this.kind = item.kind; this.category = item.category; this.title = item.title; this.location = item.location;
         this.description = item.description; this.contact = item.contact; this.occurredAt = item.occurredAt;
+        this.mediaId = item.mediaId ?? ''; this.mediaType = item.mediaType ?? '';
       } else {
         const draft = await Api.draft(); if (!this.active) { return; }
         const input = draft.input;
         if (draft.exists && input !== null) {
           this.kind = input.kind; this.category = input.category; this.title = input.title; this.location = input.location;
           this.description = input.description; this.contact = input.contact; this.occurredAt = input.occurredAt; this.requestId = input.requestId;
+          this.mediaId = input.mediaId ?? ''; this.mediaType = input.mediaType ?? '';
           this.hasSavedDraft = true; this.savedDraftAt = draft.updatedAt;
           this.notice = '已恢复草稿 · 可继续编辑后发布';
         }
@@ -47,6 +58,7 @@ export struct PublishPage {
     } catch (error) { if (this.active) { this.phase = 'error'; this.error = (error as Error).message; } }
   }
   example(): void {
+    this.clearMedia();
     this.kind = 'lost'; this.category = '证件卡片'; this.title = '寻找蓝色校园卡套'; this.location = '图书馆一楼';
     this.description = '蓝色卡套，背面贴有白色贴纸；这是用于课程演示的虚构信息。'; this.contact = '校园服务台转接（演示）';
     this.occurredAt = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
@@ -62,6 +74,36 @@ export struct PublishPage {
       message: '替换后可继续编辑，保存草稿时会更新已保存内容。',
       primaryButton: { value: '继续填写', action: () => {} },
       secondaryButton: { value: '填入示例', action: () => this.example() } });
+  }
+  clearMedia(): void {
+    this.mediaId = '';
+    this.mediaType = '';
+    this.mediaStatus = '';
+  }
+  async upload(video: boolean, fromAlbum: boolean): Promise<void> {
+    if (this.busy) { return; }
+    this.busy = true;
+    this.uploading = true;
+    this.error = '';
+    try {
+      const bytes = await MediaPicker.choose(this.getUIContext().getHostContext() as common.UIAbilityContext, video, fromAlbum);
+      if (bytes === null || !this.active) { return; }
+      const result = await Api.uploadMedia(video ? 'video' : 'photo', bytes, this.analyzeMedia);
+      if (!this.active) { return; }
+      this.mediaId = result.id;
+      this.mediaType = result.type;
+      if (result.analysisStatus === 'recognized' && result.recognition !== null) {
+        this.category = result.recognition.category;
+        this.mediaStatus = '识别为「' + result.recognition.object + '」，已填写分类，可以修改。';
+      } else {
+        this.mediaStatus = result.analysisStatus === 'skipped' ? '' : '已上传附件，未能自动分类，请核对下方分类。';
+      }
+    } catch (error) {
+      if (this.active) { this.mediaStatus = (error as Error).message || '附件处理失败，请重试'; }
+    } finally {
+      this.busy = false;
+      this.uploading = false;
+    }
   }
   goTo(step: number): void {
     if (this.busy) { return; }
@@ -96,6 +138,7 @@ export struct PublishPage {
       await Api.discardDraft(this.requestId, this.savedDraftAt);
       if (this.active) {
         this.kind = 'lost'; this.category = '证件卡片'; this.title = ''; this.location = ''; this.description = ''; this.contact = '校园服务台转接（演示）';
+        this.clearMedia();
         this.occurredAt = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
         this.requestId = 'draft-' + Date.now() + '-' + Math.random().toString(36).slice(2); this.savedDraftAt = ''; this.hasSavedDraft = false; this.step = 1;
         this.baseline = JSON.stringify(this.input()); this.notice = '旧草稿已清除 · 可以重新填写';
@@ -157,12 +200,44 @@ export struct PublishPage {
   }
 
   @Builder
+  attachment() {
+    Column({ space: 8 }) {
+      Row({ space: 8 }) {
+        Text('AI 自动填分类').fontSize(14).fontWeight(FontWeight.Medium).fontColor(Colors.ink).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.analyzeMedia }).onChange((value: boolean) => { this.analyzeMedia = value; })
+      }.width('100%')
+      Text('开启后照片或视频画面会发给视觉识别服务。发布后附件可见，请避开人脸和证件号码。')
+        .fontSize(12).fontColor(Colors.muted).lineHeight(19).width('100%')
+      Row({ space: 8 }) {
+        Button('拍照上传').fontSize(13).fontColor(Colors.green).backgroundColor(Colors.surface)
+          .layoutWeight(1).constraintSize({ minHeight: 42 }).onClick(() => { this.upload(false, false); })
+        Button('录短视频').fontSize(13).fontColor(Colors.green).backgroundColor(Colors.surface)
+          .layoutWeight(1).constraintSize({ minHeight: 42 }).onClick(() => { this.upload(true, false); })
+      }.width('100%')
+      Button('从相册选照片').fontSize(13).fontColor(Colors.green).backgroundColor(Colors.surface)
+        .width('100%').constraintSize({ minHeight: 42 }).onClick(() => { this.upload(false, true); })
+      if (this.uploading) {
+        Text('正在上传或识别…').fontSize(12).fontColor(Colors.muted).width('100%')
+      }
+      if (this.mediaId.length) {
+        Row({ space: 8 }) {
+          Text(this.mediaType === 'video' ? '已添加短视频' : '已添加物品照片').fontSize(13)
+            .fontColor(Colors.ink).layoutWeight(1)
+          Button('移除').fontSize(12).fontColor(Colors.red).backgroundColor(Colors.surface)
+            .constraintSize({ minHeight: 40 }).onClick(() => this.clearMedia())
+        }.width('100%')
+      }
+      if (this.mediaStatus.length) { Text(this.mediaStatus).fontSize(12).fontColor(Colors.ink).width('100%') }
+    }.width('100%').padding(12).borderRadius(14).backgroundColor(Colors.soft)
+  }
+  @Builder
   basics() {
     Column({ space: 9 }) {
       Row({ space: 4 }) {
         SegmentTab({ label: '寻物启事', selected: this.kind === 'lost', onSelect: () => { this.kind = 'lost'; } }).layoutWeight(1)
         SegmentTab({ label: '招领启事', selected: this.kind === 'found', onSelect: () => { this.kind = 'found'; } }).layoutWeight(1)
       }.width('100%').padding(3).backgroundColor(Colors.soft).borderRadius(12)
+      if (this.kind === 'found') { this.attachment() }
       this.fieldLabel('物品分类', '')
       Grid() {
         ForEach(CATEGORIES, (category: string) => {
@@ -244,6 +319,10 @@ export struct PublishPage {
       }.width('100%')
       Text(this.location + '  ·  ' + this.occurredAt).fontSize(13).fontColor(Colors.muted).width('100%')
       Text(this.description).fontSize(14).lineHeight(22).fontColor(Colors.ink).width('100%')
+      if (this.kind === 'found' && this.mediaId.length) {
+        Text(this.mediaType === 'video' ? '随启事发布 1 段短视频' : '随启事发布 1 张照片')
+          .fontSize(13).fontColor(Colors.green).width('100%')
+      }
     }.width('100%').padding(14).backgroundColor(Colors.surface).borderRadius(16)
       .border({ width: 1, color: Colors.stroke })
     Column({ space: 6 }) {

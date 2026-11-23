@@ -2,6 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
+const { MediaError, readUpload, prepareMedia, parseRecognition, createVisionProvider, rankMatches, createMediaStore } = require('./vision.cjs');
 const CATEGORIES = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 const dateKey = (date = new Date()) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 function isDateKey(value) {
@@ -46,7 +47,11 @@ function reliableResolvedAt(item) {
   // value is only a placeholder, not evidence of the actual handover date.
   return candidate && candidate !== item.createdAt ? candidate : '';
 }
-const fingerprint = input => createHash('sha256').update(JSON.stringify(['title', 'location', 'description', 'contact', 'kind', 'category', 'occurredAt'].map(key => input[key]))).digest('hex');
+function fingerprint(input) {
+  const fields = ['title', 'location', 'description', 'contact', 'kind', 'category', 'occurredAt'].map(key => input[key]);
+  if (input.mediaId) fields.push(input.mediaId);
+  return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
+}
 function normalize(item) {
   const normalized = { ...item, owner: ACTORS.includes(item.owner) ? item.owner : 'peer-01',
     updatedAt: item.updatedAt || item.createdAt, requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
@@ -104,6 +109,9 @@ function createApp(options = {}) {
   let store = Array.isArray(rawStore) ? { version: 2, items: rawStore.map(normalize), claims: [], favorites: [] }
     : { ...rawStore, version: 2, items: rawStore.items.map(normalize) };
   store = { ...store, drafts: store.drafts || [] };
+  const mediaStore = createMediaStore(path.join(path.dirname(file), 'media'), options.memory);
+  const recognize = options.recognize ?? createVisionProvider(CATEGORIES);
+  let activeMedia = 0;
   let fault = 'normal';
   const commit = next => {
     if (!options.memory) {
@@ -118,12 +126,67 @@ function createApp(options = {}) {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
     res.end(JSON.stringify({ code: status < 400 ? 0 : status, message, data }));
   };
+  const itemView = (item, actor) => {
+    const accepted = store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'accepted');
+    const { requestId, createFingerprint, ...visible } = item;
+    return { ...visible, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
+      contactVisible: item.owner === actor || accepted, ownerName: names[item.owner],
+      saved: store.favorites.some(f => f.actor === actor && f.itemId === item.id),
+      myPending: store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'pending'),
+      claimCount: store.claims.filter(c => c.itemId === item.id && c.status === 'pending').length };
+  };
   const server = http.createServer(async (req, res) => {
     const started = Date.now(); let url;
     try { url = new URL(req.url, 'http://127.0.0.1'); }
     catch { return reply(res, 400, null, '请求地址格式错误'); }
     res.on('finish', () => console.log(JSON.stringify({ time: now(), method: req.method, path: url.pathname, query: url.search, status: res.statusCode, ms: Date.now() - started })));
     try {
+      const actor = req.headers['x-demo-user'] || 'demo-user';
+      const view = item => itemView(item, actor);
+      if (url.pathname.startsWith('/api/') && !ACTORS.includes(actor)) { req.resume(); return reply(res, 400, null, '演示身份无效'); }
+      const mediaPath = /^\/api\/item-media\/([^/]+)\/([^/]+)$/u.exec(url.pathname);
+      if (mediaPath && ['GET', 'HEAD'].includes(req.method)) {
+        const item = store.items.find(i => i.id === mediaPath[1] && i.mediaId === mediaPath[2] && i.status !== 'withdrawn');
+        const asset = item && mediaStore.get(item.owner, item.mediaId);
+        return asset ? mediaStore.send(req, res, item.owner, asset) : reply(res, 404, null, '附件已不可用');
+      }
+      const photoSearch = url.pathname === '/api/media/search';
+      if ((photoSearch || url.pathname === '/api/media') && req.method === 'POST') {
+        const type = photoSearch ? 'photo' : url.searchParams.get('type');
+        const analyze = photoSearch || url.searchParams.get('analyze') === 'true';
+        if (!['photo', 'video'].includes(type)) { req.resume(); return reply(res, 400, null, '附件类型无效'); }
+        if (photoSearch && !recognize) { req.resume(); return reply(res, 503, null, '视觉识别尚未配置，可继续使用关键词搜索'); }
+        if (activeMedia >= 2) { req.resume(); return reply(res, 429, null, '媒体服务繁忙，请稍后重试'); }
+        activeMedia++;
+        try {
+          const { content, frames } = await prepareMedia(await readUpload(req, type), type);
+          let recognition = null;
+          let analysisStatus = analyze ? 'unavailable' : 'skipped';
+          if (analyze && recognize) {
+            try {
+              recognition = parseRecognition(await recognize(frames), CATEGORIES);
+              analysisStatus = recognition.category ? 'recognized' : 'uncertain';
+            } catch { analysisStatus = 'failed'; }
+          }
+          if (photoSearch) {
+            if (analysisStatus === 'failed') return reply(res, 502, null, '视觉识别暂不可用，请重试或使用关键词搜索');
+            if (analysisStatus === 'uncertain') return reply(res, 422, null, '没能识别物品，请用光线充足的单物品照片重试');
+            const matches = rankMatches(store.items, recognition, item =>
+              item.mediaId && mediaStore.get(item.owner, item.mediaId)?.recognition, actor);
+            return reply(res, 200, { recognition, matches: matches.map(({ item, reasons }) => ({ item: view(item), reasons })) });
+          }
+          const id = randomUUID();
+          const referenced = new Set([
+            ...store.items.filter(item => item.owner === actor).map(item => item.mediaId),
+            ...store.drafts.filter(draft => draft.actor === actor).map(draft => draft.input.mediaId)
+          ]);
+          mediaStore.save(actor, { id, type, recognition, created: Date.now() }, content, referenced);
+          return reply(res, 201, { id, type, recognition, analysisStatus });
+        } catch (error) {
+          if (error instanceof MediaError) return reply(res, error.status, null, error.message);
+          throw error;
+        } finally { activeMedia--; }
+      }
       const chunks = []; let bytes = 0;
       for await (const chunk of req) { bytes += chunk.length; if (bytes > 16384) return reply(res, 413, null, '请求过大'); chunks.push(chunk); }
       let body;
@@ -135,22 +198,14 @@ function createApp(options = {}) {
       }
       if (url.pathname === '/health') return reply(res, 200, { service: 'CampusFinder', version: 2, count: store.items.length });
       if (!url.pathname.startsWith('/api/')) return reply(res, 404, null, '接口不存在');
-      const actor = req.headers['x-demo-user'] || 'demo-user';
-      if (!ACTORS.includes(actor)) return reply(res, 400, null, '演示身份无效');
       await new Promise(resolve => setTimeout(resolve, fault === 'slow' ? 2500 : (options.delay ?? 250)));
       if (req.method === 'GET' && fault === 'error') return reply(res, 503, null, '服务暂不可用，请稍后重试');
       if (req.method === 'GET' && fault === 'malformed') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{invalid'); }
       if (req.method === 'GET' && fault === 'shape') return reply(res, 200, { items: [null], claims: [null], matches: [null], exists: true, input: { requestId: '' } });
       const list = fault === 'empty' ? [] : store.items;
-      const view = item => {
-        const accepted = store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'accepted');
-        const { requestId, createFingerprint, ...visible } = item;
-        return { ...visible, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
-          contactVisible: item.owner === actor || accepted, ownerName: names[item.owner],
-          saved: store.favorites.some(f => f.actor === actor && f.itemId === item.id),
-          myPending: store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'pending'),
-          claimCount: store.claims.filter(c => c.itemId === item.id && c.status === 'pending').length };
-      };
+      const validMedia = () => body.mediaId === undefined || body.mediaId === '' ||
+        (body.kind === 'found' && !!mediaStore.get(actor, body.mediaId));
+      const mediaFields = () => body.mediaId ? { mediaId: body.mediaId, mediaType: mediaStore.get(actor, body.mediaId).type } : {};
       const claimView = claim => {
         const item = store.items.find(i => i.id === claim.itemId);
         return { ...claim, itemTitle: item.title, kind: item.kind, category: item.category, senderName: names[claim.sender], ownerName: names[claim.owner] };
@@ -175,7 +230,8 @@ function createApp(options = {}) {
             if (typeof body[key] !== 'string' || body[key].length > max) return reply(res, 400, null, '草稿字段格式或长度无效');
           }
           if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind) || typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80) return reply(res, 400, null, '草稿类型或标识无效');
-          const input = { title: body.title.trim(), location: body.location.trim(), description: body.description.trim(), contact: body.contact.trim(), occurredAt: body.occurredAt.trim(), kind: body.kind, category: body.category, requestId: body.requestId };
+          if (!validMedia()) return reply(res, 400, null, '附件不可用，请重新上传');
+          const input = { title: body.title.trim(), location: body.location.trim(), description: body.description.trim(), contact: body.contact.trim(), occurredAt: body.occurredAt.trim(), kind: body.kind, category: body.category, requestId: body.requestId, ...mediaFields() };
           const previous = Date.parse(store.drafts.find(d => d.actor === actor)?.updatedAt || '');
           const draft = { actor, input, updatedAt: new Date(Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0)).toISOString() };
           commit({ ...store, drafts: [...store.drafts.filter(d => d.actor !== actor), draft] });
@@ -265,9 +321,10 @@ function createApp(options = {}) {
         if (!CATEGORIES.includes(body.category) || !['lost', 'found'].includes(body.kind)) return '分类或类型无效';
         if (body.occurredAt !== undefined && (!isDateKey(body.occurredAt) || body.occurredAt > dateKey())) return '日期需为有效的YYYY-MM-DD，且不能晚于今天';
         if (body.requestId !== undefined && (typeof body.requestId !== 'string' || !body.requestId.trim() || body.requestId.length > 80)) return '请求标识无效';
+        if (!validMedia()) return '附件不可用，请重新上传';
         return '';
       };
-      const fields = () => ({ title: body.title.trim(), description: body.description.trim(), location: body.location.trim(), contact: body.contact.trim(), kind: body.kind, category: body.category, occurredAt: body.occurredAt || dateKey() });
+      const fields = () => ({ title: body.title.trim(), description: body.description.trim(), location: body.location.trim(), contact: body.contact.trim(), kind: body.kind, category: body.category, occurredAt: body.occurredAt || dateKey(), ...mediaFields() });
       if (url.pathname === '/api/items' && req.method === 'POST') {
         const invalid = validateItem(); if (invalid) return reply(res, 400, null, invalid);
         const existing = body.requestId && store.items.find(i => i.owner === actor && i.requestId === body.requestId);
@@ -325,6 +382,7 @@ function createApp(options = {}) {
           // Existing claims refer to the original evidence; require withdrawing first if changing type/category.
           if ((body.kind !== item.kind || body.category !== item.category) && store.claims.some(c => c.itemId === id && c.status === 'pending')) return reply(res, 409, null, '已有待核对申请，请先处理后再更改类型或分类');
           const updated = { ...item, ...fields(), updatedAt: now(), history: [...item.history, event('更新物品线索')] };
+          if (body.mediaId === '' || body.kind !== 'found') { delete updated.mediaId; delete updated.mediaType; }
           commit({ ...store, items: store.items.map(i => i.id === id ? updated : i) }); return reply(res, 200, view(updated));
         }
         const target = { resolve: 'resolved', withdraw: 'withdrawn', restore: 'open' }[action];
