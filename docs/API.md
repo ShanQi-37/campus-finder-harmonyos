@@ -2,7 +2,7 @@
 
 默认 `http://127.0.0.1:4524`；独立Node服务，ArkUI通过NetworkKit请求。统一 `{code:0,message:"ok",data:...}`，失败HTTP400/403/404/409/413/500/503，message可读；客户端检查状态、解析、嵌套对象与统计恒等式，finally销毁HTTP对象。
 
-请求头 `X-Demo-User` 取demo-user/peer-01/peer-02，默认demo-user。固定虚构角色不构成身份认证，仅本机单进程课程演示。联系和证明均使用虚构内容。
+App 通过 `POST /api/auth/register` 读取 `{phone,student,displayName,password}` 创建本机账号。手机号与学号至少提供一项，二者绑定到同一身份，已占用的标识返回 409。昵称选填，密码使用随机盐和 scrypt 派生值保存。注册成功和 `POST /api/auth/login` 成功均返回 `{token,actor,displayName}`。登录提交 `{method,account,password}`，`method` 为 `phone` 或 `student`。业务请求携带 `Authorization: Bearer <token>`，退出时调用 `POST /api/auth/logout` 撤销会话。已发布附件和 `/health` 可直接读取。本机账号通过密码登录。
 
 | 方法 | 路径 | 功能 |
 | --- | --- | --- |
@@ -55,7 +55,10 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 
 | 方法 | 路径 | 返回或业务约束 |
 | --- | --- | --- |
-| GET | /api/me | posted/open/resolved/saved、incomingPending/outgoingPending、draftTitle/draftUpdatedAt；当前身份独立摘要 |
+| GET | /api/me | posted/open/resolved/saved、incomingPending/outgoingPending、draftTitle/draftUpdatedAt、unreadMatches；当前身份独立摘要 |
+| GET | /api/match-alerts | 返回当前用户的 `{alerts,unread}`；可选 `itemId` 按本人启事筛选 |
+| GET | /api/match-alerts/:id | 查看当前用户可访问的匹配提醒 |
+| POST | /api/match-alerts/:id/read | 标记当前用户对该提醒已读，返回该提醒，允许重复调用 |
 | GET | /api/draft | {exists,input,updatedAt}；无草稿时input为null |
 | POST | /api/draft | PublishInput同名字段，允许内容未填完整；每个身份一份草稿，保存完整替换 |
 | GET | /api/items/:id/matches | {matches:[{item,reasons}]}，最多5条；Item沿用当前身份的联系可见性 |
@@ -63,6 +66,8 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 草稿字符串字段必须存在并遵守标题36、地点30、描述300、联系60、日期10字上限；kind/category合法，requestId为1–80字非空标识。草稿允许日期尚未填写或未完成，正式提交仍执行完整日期和内容校验。成功发布的快照同时移除当前身份且requestId一致的草稿；发布失败不清理。旧发布请求的幂等重试也不会清理之后保存的另一份草稿。旧数组和不含drafts的第二版对象兼容读取，不重置原记录。
 
 相似线索仅从open启事匹配：同类别、相反kind、与原启事不同owner，排除自身、结束和撤回记录。相同地点优先，其次包含关系或共享连续两字，再看发生日期相差不超过3日；并列按创建时间倒序、ID稳定排序。返回可解释理由，不返回概率、不声称AI识别，也不证明物品归属。已结束启事返回空候选，他人的撤回启事404。
+
+智能匹配提醒包含 `id,source,candidate,reasons,createdAt,unread`，其中 `source` 是当前用户的启事。两条启事需来自不同账号、类型相反、分类相同、状态为待寻回，且发生日期相差最多七天。匹配会比较标题及已有的视觉识别物品名，并要求地点相近或至少两项共同的识别外观特征。双方共享稳定的匹配 ID，各自保存已读状态。启事失效后会从列表移除。详情和已读接口仅对启事双方可用，联系方式遵循启事详情权限。
 
 分页请求在数据变化后超出末页时自动返回最后有效页；空集合返回第1页。客户端使用返回page更新页码，避免最后一页操作后困在无效页。异常恢复或重置筛选时，列表与首页实时摘要同时重新请求。
 
@@ -80,17 +85,27 @@ Item还有ownerName,status,updatedAt,resolvedAt,history[{label,at}],saved,myPend
 
 `GET /api/claims` 新增status=all/pending/accepted/rejected/cancelled，默认all，继续结合direction=received/sent和当前身份过滤；pending是当前结果内待核对数。客户端任务入口默认pending，空状态可切回全部申请。个人启事复用列表的status筛选；withdrawn仅本人owner列表可见，恢复后退出撤回结果。
 
-## 招领媒体和拍照找物
+## 启事媒体和拍照找物
 
 | 方法 | 路径 | 输入和结果 |
 | --- | --- | --- |
 | POST | `/api/media?type=photo或video&analyze=true或false` | 原始二进制。照片 JPEG/PNG 至多 8 MiB，视频 MP4 至多 24 MiB。返回 `{id,type,recognition,analysisStatus}`，可用状态为 recognized、uncertain、unavailable、failed、skipped。 |
 | GET / HEAD | `/api/item-media/:itemId/:mediaId` | 仅提供可见且正在使用此附件的启事媒体。支持字节范围，撤回后返回 404。 |
+| GET / HEAD | `/api/item-media/:itemId/:mediaId/cover` | 读取识别成功且已发布的视频 JPEG 封面。旧视频首次读取时从已保存的视频补取一帧。附件未发布、已撤回或没有封面时返回 404。 |
 | POST | `/api/media/search` | JPEG/PNG 二进制。返回 `{recognition,matches}`，最多五条其他身份发布的待寻回招领启事。 |
 
 分类结果含 `category`、`object`、`features`。后端限制分类值和特征长度。拍照找物比对识别的名称和特征与候选的标题、描述和已有的识别特征，没有可用候选时返回空列表。联系指引沿用启事的权限规则。
 
 草稿、发布及编辑可用 `mediaId` 引用同一身份上传的附件。明确传空字符串可移除附件。草稿和启事读取时同时返回附件类型 `mediaType`。老记录允许两个字段均缺省。媒体二进制与元数据保存在同一运行目录下。每次上传时清理该身份未被启事或草稿引用的旧附件，保留最近八份。查找用照片只作当次处理。坏格式返回 415，超过大小返回 413，模糊照片或无法解码返回 422，视觉模型调用失败返回 502，缺少配置返回 503。
+
+## 认领核对附件
+
+| 方法 | 路径 | 输入和结果 |
+| --- | --- | --- |
+| POST | `/api/items/:id/claim-evidence?type=photo` 或 `type=video` | 待寻回招领启事的申请人上传 JPEG、PNG 或 MP4，返回附件 `id`、`type` 和 `analysisStatus: "skipped"`。 |
+| GET / HEAD | `/api/claims/:id/evidence` | 已登录的申请人或启事发布者可以读取该申请的附件，支持字节范围。缺少附件或无权访问时返回 404。 |
+
+提交认领时可省略 `evidenceId`，也可引用同一演示身份为该启事上传的单个附件。含附件的申请返回 `evidenceType`。核对附件存于本机数据目录的 `claim-evidence` 下，仅做媒体格式处理，不发送给视觉模型。
 
 ## 描述找物和拍照统计
 
