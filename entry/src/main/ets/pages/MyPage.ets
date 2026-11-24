@@ -2,21 +2,24 @@ import { FeedModel } from '../model/FeedModel';
 import { PersonalSummary, emptySummary } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
-import { Colors, PageHeader, SegmentTab, AmbientBackground, Shadow } from '../components/Common';
+import { Colors, PageHeader, SegmentTab, AmbientBackground } from '../components/Common';
 import { FeedContent } from '../components/FeedContent';
 import { TaskTile } from '../components/TaskTile';
 import { BottomNav } from '../components/BottomNav';
 @ComponentV2
 export struct MyPage {
+  @Event onSignOut: () => void = () => {};
   @Local model: FeedModel = new FeedModel();
-  @Local actor: string = Session.actor;
   @Local tab: string = 'posted';
   @Local postedStatus: string = 'all';
   @Local summary: PersonalSummary = emptySummary();
   @Local badgeError: boolean = false;
   @Local syncing: boolean = true;
-  @Local identities: boolean = false;
+  @Local matchCount: number = 0;
+  @Local matchCountLoading: boolean = true;
+  @Local matchCountError: boolean = false;
   private stack: NavPathStack = new NavPathStack();
+  private feedScroller: Scroller = new Scroller();
   private generation: number = 0;
   aboutToDisappear(): void { this.model.cancel(); this.generation++; }
   loadRecords(reset: boolean = true): void {
@@ -29,17 +32,21 @@ export struct MyPage {
     this.loadRecords(reset);
     this.summary = emptySummary(); this.badgeError = false; this.syncing = true;
     const ticket = ++this.generation;
+    this.refreshMatchCount(ticket);
     try { const result = await Api.me(); if (ticket === this.generation) { this.summary = result; this.syncing = false; } }
     catch (error) { if (ticket === this.generation) { this.badgeError = true; this.syncing = false; } }
   }
-  switchActor(actor: string): void {
-    if (this.actor !== actor) {
-      Session.actor = actor;
-      this.actor = actor;
-      this.postedStatus = 'all';
-      this.reload();
+  async refreshMatchCount(ticket: number): Promise<void> {
+    this.matchCountLoading = true;
+    this.matchCountError = false;
+    try {
+      const result = await Api.matchAlerts();
+      if (ticket === this.generation) { this.matchCount = result.alerts.length; }
+    } catch {
+      if (ticket === this.generation) { this.matchCountError = true; }
+    } finally {
+      if (ticket === this.generation) { this.matchCountLoading = false; }
     }
-    this.identities = false;
   }
   selectTab(tab: string): void {
     if (this.tab === tab) { return; }
@@ -61,34 +68,21 @@ export struct MyPage {
   profile() {
     Column({ space: 8 }) {
       Row({ space: 10 }) {
-        Text(this.actor === 'demo-user' ? '同' : (this.actor === 'peer-01' ? '助' : '愿'))
+        Text(Session.displayName.slice(0, 1))
           .fontSize(21).fontWeight(FontWeight.Bold).fontColor(Colors.green).width(43).height(43)
           .textAlign(TextAlign.Center).backgroundColor(Colors.soft).borderRadius(13).accessibilityLevel('no')
         Column({ space: 4 }) {
-          Text(this.actor === 'demo-user' ? '校园体验同学' : (this.actor === 'peer-01' ? '互助体验同学' : '志愿体验同学'))
+          Text(Session.displayName)
             .fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1)
           Text(this.syncing ? '正在同步个人记录…' : (this.badgeError ? '个人数据暂不可用' :
             ('待寻回 ' + this.summary.open + ' · 已寻回 ' + this.summary.resolved)))
             .fontSize(11).fontColor(Colors.muted).maxLines(1)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Button(this.identities ? '收起' : '切换身份').height(36).fontSize(12).fontColor(Colors.green)
-          .backgroundColor(Colors.paper).accessibilitySelected(this.identities)
-          .onClick(() => { this.identities = !this.identities; })
+        Button('退出登录').constraintSize({ minHeight: 40 }).fontSize(12).fontColor(Colors.red)
+          .backgroundColor(Colors.redSoft).onClick(() => this.onSignOut())
       }.width('100%')
-      if (this.identities) {
-        Row({ space: 4 }) {
-          SegmentTab({ label: '校园同学', selected: this.actor === 'demo-user',
-            onSelect: () => this.switchActor('demo-user') }).layoutWeight(1)
-          SegmentTab({ label: '互助同学', selected: this.actor === 'peer-01',
-            onSelect: () => this.switchActor('peer-01') }).layoutWeight(1)
-          SegmentTab({ label: '志愿同学', selected: this.actor === 'peer-02',
-            onSelect: () => this.switchActor('peer-02') }).layoutWeight(1)
-        }.width('100%').padding(3).borderRadius(11).backgroundColor(Colors.soft)
-        Text('选择虚构身份体验认领和交接。').fontSize(11).fontColor(Colors.muted).width('100%')
-      }
     }.width('100%').padding(11).backgroundColor(Colors.glass).borderRadius(15)
-      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
-      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+      .border({ width: 1, color: Colors.glassStroke })
   }
 
   @Builder
@@ -98,6 +92,8 @@ export struct MyPage {
         failed: this.badgeError, onOpen: () => this.stack.pushPath({ name: 'ClaimCenter', param: 'received' }) }).layoutWeight(1)
       TaskTile({ label: '我的申请', value: this.syncing ? '…' : this.summary.outgoingPending.toString(),
         failed: this.badgeError, onOpen: () => this.stack.pushPath({ name: 'ClaimCenter', param: 'sent' }) }).layoutWeight(1)
+      TaskTile({ label: '智能匹配', value: this.matchCountLoading ? '…' : this.matchCount.toString(),
+        failed: this.matchCountError, onOpen: () => this.stack.pushPath({ name: 'MatchAlerts', param: '' }) }).layoutWeight(1)
     }.width('100%')
   }
 
@@ -149,14 +145,18 @@ export struct MyPage {
         AmbientBackground()
         Column({ space: 8 }) {
         PageHeader({ title: '我的校园', back: true, onBack: () => { this.stack.clear(); } })
-        Column({ space: 8 }) {
-          this.profile()
-          this.tasks()
-          this.draftCard()
-          this.recordControls()
-        }.width('100%').padding({ left: 16, right: 16 })
-        FeedContent({ model: this.model, filters: false,
-          onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } }).layoutWeight(1)
+        Scroll(this.feedScroller) {
+          Column({ space: 8 }) {
+            Column({ space: 8 }) {
+              this.profile()
+              this.tasks()
+              this.draftCard()
+              this.recordControls()
+            }.width('100%').padding({ left: 16, right: 16 })
+            FeedContent({ model: this.model, filters: false, pageScroller: this.feedScroller,
+              onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } })
+          }.width('100%')
+        }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
         BottomNav({ active: 'My', onNavigate: (route: string) => this.navigate(route) })
         }.width('100%').height('100%')
       }.width('100%').height('100%')

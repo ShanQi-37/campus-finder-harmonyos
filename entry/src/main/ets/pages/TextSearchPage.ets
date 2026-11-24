@@ -1,4 +1,4 @@
-import { Colors, ItemCard, PageHeader, StatePanel, AmbientBackground, Shadow } from '../components/Common';
+import { Colors, ItemCard, PageHeader, StatePanel, AmbientBackground } from '../components/Common';
 import { CATEGORIES, CATEGORY_OPTIONS, Item, SearchCriteria } from '../model/Models';
 import { FoundSearchModel } from '../model/FoundSearchModel';
 import { Api } from '../service/Api';
@@ -101,8 +101,7 @@ export struct TextSearchPage {
       if (this.hint) { Text(this.hint).fontSize(13).fontColor(Colors.green).width('100%') }
       if (this.error) { Text(this.error).fontSize(13).fontColor(Colors.red).width('100%') }
     }.padding(14).width('100%').borderRadius(16).backgroundColor(Colors.glass)
-      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
-      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+      .border({ width: 1, color: Colors.glassStroke })
       .enabled(!this.interpreting && this.model.phase !== 'loading')
   }
 

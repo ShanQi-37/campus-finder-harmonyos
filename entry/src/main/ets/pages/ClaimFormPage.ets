@@ -1,6 +1,8 @@
+import { common } from '@kit.AbilityKit';
 import { Item, ClaimInput, PhotoCandidate, emptyItem } from '../model/Models';
 import { Api } from '../service/Api';
-import { categoryArt, Colors, ItemThumb, PageHeader, StatePanel, AmbientBackground, Shadow } from '../components/Common';
+import { MediaPicker } from '../service/MediaPicker';
+import { categoryArt, Colors, ItemThumb, PageHeader, StatePanel, AmbientBackground } from '../components/Common';
 
 @ComponentV2
 export struct ClaimFormPage {
@@ -11,6 +13,10 @@ export struct ClaimFormPage {
   @Local error: string = '';
   @Local issue: string = '';
   @Local busy: boolean = false;
+  @Local evidenceId: string = '';
+  @Local evidenceType: string = '';
+  @Local evidenceError: string = '';
+  @Local uploadingEvidence: boolean = false;
   private stack: NavPathStack = new NavPathStack();
   private itemId: string = '';
   private photoSearchId?: string;
@@ -48,6 +54,27 @@ export struct ClaimFormPage {
     });
   }
 
+  async addEvidence(video: boolean): Promise<void> {
+    if (this.busy) { return; }
+    this.busy = true;
+    this.uploadingEvidence = true;
+    this.evidenceError = '';
+    try {
+      const bytes = await MediaPicker.choose(this.getUIContext().getHostContext() as common.UIAbilityContext, video, true);
+      if (bytes === null || !this.active) { return; }
+      const attachment = await Api.uploadClaimEvidence(this.itemId, video ? 'video' : 'photo', bytes);
+      if (this.active) {
+        this.evidenceId = attachment.id;
+        this.evidenceType = attachment.type;
+      }
+    } catch (error) {
+      if (this.active) { this.evidenceError = (error as Error).message || '附件上传失败，请重试'; }
+    } finally {
+      this.uploadingEvidence = false;
+      this.busy = false;
+    }
+  }
+
   async submit(): Promise<void> {
     if (this.busy) { return; }
     if (this.proof.trim().length < 8) {
@@ -63,7 +90,8 @@ export struct ClaimFormPage {
     this.busy = true;
     this.issue = '';
     this.error = '';
-    const input: ClaimInput = { proof: this.proof, contact: this.contact, photoSearchId: this.photoSearchId };
+    const input: ClaimInput = { proof: this.proof, contact: this.contact, photoSearchId: this.photoSearchId,
+      evidenceId: this.evidenceId || undefined };
     try {
       await Api.claim(this.itemId, input);
       if (this.active) { this.stack.pop({ changed: true }); }
@@ -88,8 +116,7 @@ export struct ClaimFormPage {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
     }.width('100%').padding(11).backgroundColor(Colors.glass).borderRadius(15)
-      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
-      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+      .border({ width: 1, color: Colors.glassStroke })
   }
 
   @Builder
@@ -108,6 +135,9 @@ export struct ClaimFormPage {
         .height(114).fontSize(14).maxLength(240).backgroundColor(Colors.paper).borderRadius(10)
         .border({ width: 1, color: this.issue === 'proof' ? Colors.red : Colors.stroke })
         .accessibilityText('核对说明').onChange((value: string) => { this.proof = value; this.clearIssue('proof'); })
+      if (this.item.kind === 'found') {
+        this.evidenceFields()
+      }
       Row({ space: 8 }) {
         Text('联系指引').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).layoutWeight(1)
         Text('仅申请双方可见').fontSize(11).fontColor(Colors.muted)
@@ -117,8 +147,40 @@ export struct ClaimFormPage {
         .border({ width: 1, color: this.issue === 'contact' ? Colors.red : Colors.stroke })
         .accessibilityText('联系指引').onChange((value: string) => { this.contact = value; this.clearIssue('contact'); })
     }.width('100%').padding(14).backgroundColor(Colors.glass).borderRadius(15)
-      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
-      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+      .border({ width: 1, color: Colors.glassStroke })
+  }
+
+  @Builder
+  evidenceFields() {
+    Column({ space: 7 }) {
+      Text('核对附件（选填）').fontSize(15).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
+      Text('可提供一张物品旧照或一段短视频，仅申请双方可见。')
+        .fontSize(12).fontColor(Colors.muted).lineHeight(19).width('100%')
+      Row({ space: 8 }) {
+        Button('选图片').constraintSize({ minHeight: 40 }).fontSize(13).fontColor(Colors.green)
+          .backgroundColor(Colors.surface).layoutWeight(1).onClick(() => { this.addEvidence(false); })
+        Button('选视频').constraintSize({ minHeight: 40 }).fontSize(13).fontColor(Colors.green)
+          .backgroundColor(Colors.surface).layoutWeight(1).onClick(() => { this.addEvidence(true); })
+      }.width('100%')
+      if (this.uploadingEvidence) {
+        Text('正在添加附件…').fontSize(12).fontColor(Colors.muted).width('100%')
+      }
+      if (this.evidenceId.length) {
+        Row({ space: 8 }) {
+          Text(this.evidenceType === 'video' ? '已添加短视频' : '已添加图片')
+            .fontSize(12).fontColor(Colors.ink).layoutWeight(1)
+          Button('移除').constraintSize({ minHeight: 36 }).fontSize(12).fontColor(Colors.red)
+            .backgroundColor(Colors.surface).onClick(() => {
+              this.evidenceId = '';
+              this.evidenceType = '';
+              this.evidenceError = '';
+            })
+        }.width('100%')
+      }
+      if (this.evidenceError.length) {
+        Text(this.evidenceError).fontSize(12).fontColor(Colors.red).width('100%')
+      }
+    }.width('100%').padding(10).backgroundColor(Colors.soft).borderRadius(10)
   }
 
   build() {
@@ -144,9 +206,10 @@ export struct ClaimFormPage {
           }.width('100%').layoutWeight(1).enabled(!this.busy).scrollBar(BarState.Auto).align(Alignment.Top)
           Column({ space: 7 }) {
             if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('100%') }
-            Button(this.busy ? '正在提交…' : (this.item.kind === 'found' ? '提交认领申请' : '提交寻物线索'))
+            Button(this.uploadingEvidence ? '正在添加附件…' : (this.busy ? '正在提交…' :
+              (this.item.kind === 'found' ? '提交认领申请' : '提交寻物线索')))
               .constraintSize({ minHeight: 46 }).fontSize(14).fontWeight(FontWeight.Bold).width('100%')
-              .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+              .fontColor('#FFFFFF').backgroundColor(Colors.greenDeep)
               .enabled(!this.busy).onClick(() => { this.submit(); })
           }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 12 }).backgroundColor(Colors.surface)
             .border({ width: { top: 1 }, color: Colors.stroke })

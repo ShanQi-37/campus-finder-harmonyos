@@ -1,22 +1,24 @@
 import { http } from '@kit.NetworkKit';
-import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary,
+import { Claim, ClaimInput, ClaimList, DraftState, Item, ItemList, MatchAlert, MatchAlerts, MatchList, MediaUpload, PersonalSummary,
   PhotoFunnel, PhotoMatches, PublicationWindow, PublishInput, SearchCriteria, Statistics } from '../model/Models';
 import { ResponseGuard } from './ResponseGuard';
-import { Session } from '../model/Session';
+import { LoginSession, Session } from '../model/Session';
 interface Envelope<T> { code: number; message: string; data: T; }
 export const BASE_URL: string = 'http://127.0.0.1:4524';
 export class Api {
   private static async request<T>(path: string, body?: string | ArrayBuffer, readTimeout: number = 6000): Promise<T> {
     const client = http.createHttp();
+    const token = Session.token;
     let businessMessage: string = '';
     try {
       const binary = body instanceof ArrayBuffer;
       const response = await client.request(BASE_URL + path, {
         method: body === undefined ? http.RequestMethod.GET : http.RequestMethod.POST,
-        header: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-Demo-User': Session.actor },
+        header: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'Authorization': token ? 'Bearer ' + token : '' },
         extraData: body ?? '', expectDataType: http.HttpDataType.STRING,
         connectTimeout: 4000, readTimeout: binary ? 100000 : readTimeout, usingCache: false
       });
+      if (response.responseCode === 401) { Session.expire(token); }
       const envelope = JSON.parse(response.result as string) as Envelope<T>;
       if (response.responseCode < 200 || response.responseCode >= 300 || envelope.code !== 0) {
         businessMessage = typeof envelope.message === 'string' ? envelope.message : '服务暂不可用，请稍后重试';
@@ -27,6 +29,25 @@ export class Api {
     } catch (error) {
       throw new Error(businessMessage.length ? businessMessage : '连接失败或数据异常，请检查网络后重试');
     } finally { client.destroy(); }
+  }
+  static async login(method: string, account: string, password: string): Promise<LoginSession> {
+    return Api.authSession('/api/auth/login', JSON.stringify({ method: method, account: account, password: password }));
+  }
+  static async register(phone: string, student: string, displayName: string, password: string): Promise<LoginSession> {
+    return Api.authSession('/api/auth/register',
+      JSON.stringify({ phone: phone, student: student, displayName: displayName, password: password }));
+  }
+  private static async authSession(path: string, input: string): Promise<LoginSession> {
+    const result = await Api.request<LoginSession>(path, input);
+    if (!result || typeof result.token !== 'string' || !/^[a-f0-9]{64}$/.test(result.token) ||
+        (!['demo-user', 'peer-01', 'peer-02'].includes(result.actor) && !ResponseGuard.uuid(result.actor)) ||
+        typeof result.displayName !== 'string' || !result.displayName.length) {
+      throw new Error('登录返回异常，请重试');
+    }
+    return result;
+  }
+  static async logout(): Promise<void> {
+    await Api.request<Object>('/api/auth/logout', '{}');
   }
   static async uploadMedia(type: string, bytes: ArrayBuffer, analyze: boolean): Promise<MediaUpload> {
     const result = await Api.request<MediaUpload>('/api/media?type=' + type + '&analyze=' + analyze, bytes);
@@ -63,6 +84,9 @@ export class Api {
   static mediaUrl(itemId: string, mediaId: string): string {
     return BASE_URL + '/api/item-media/' + encodeURIComponent(itemId) + '/' + encodeURIComponent(mediaId);
   }
+  static mediaCoverUrl(itemId: string, mediaId: string): string {
+    return Api.mediaUrl(itemId, mediaId) + '/cover';
+  }
   static async list(kind: string, category: string, keyword: string, owner: string = '', status: string = 'all',
     sort: string = 'latest', saved: boolean = false, page: number = 1, window?: PublicationWindow,
     resolutionWindow?: PublicationWindow): Promise<ItemList> {
@@ -90,6 +114,28 @@ export class Api {
   static action(id: string, action: string): Promise<Item> { return Api.itemResponse(Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/' + action, '{}')); }
   static favorite(id: string, saved: boolean): Promise<Item> { return Api.itemResponse(Api.request<Item>('/api/items/' + encodeURIComponent(id) + '/favorite', JSON.stringify({ saved: saved }))); }
   static claim(id: string, input: ClaimInput): Promise<Claim> { return Api.claimResponse(Api.request<Claim>('/api/items/' + encodeURIComponent(id) + '/claims', JSON.stringify(input))); }
+  static async uploadClaimEvidence(itemId: string, type: string, bytes: ArrayBuffer): Promise<MediaUpload> {
+    const result = await Api.request<MediaUpload>('/api/items/' + encodeURIComponent(itemId) + '/claim-evidence?type=' + type, bytes);
+    if (!ResponseGuard.upload(result) || result.type !== type || result.analysisStatus !== 'skipped') {
+      throw new Error('核对附件返回格式异常');
+    }
+    return result;
+  }
+  static async claimEvidence(claimId: string): Promise<ArrayBuffer> {
+    const client = http.createHttp();
+    const token = Session.token;
+    try {
+      const response = await client.request(BASE_URL + '/api/claims/' + encodeURIComponent(claimId) + '/evidence', {
+        method: http.RequestMethod.GET, header: { 'Authorization': 'Bearer ' + token },
+        expectDataType: http.HttpDataType.ARRAY_BUFFER, connectTimeout: 4000, readTimeout: 30000, usingCache: false
+      });
+      if (response.responseCode === 401) { Session.expire(token); }
+      if (response.responseCode !== 200 || !(response.result instanceof ArrayBuffer) || !response.result.byteLength) {
+        throw new Error('核对附件不可用');
+      }
+      return response.result;
+    } finally { client.destroy(); }
+  }
   static async claims(direction: string, status: string = 'all'): Promise<ClaimList> {
     const data = await Api.request<ClaimList>('/api/claims?direction=' + encodeURIComponent(direction) + '&status=' + encodeURIComponent(status));
     if (!ResponseGuard.claims(data)) { throw new Error('返回申请格式异常'); }
@@ -99,6 +145,22 @@ export class Api {
   static async matches(id: string): Promise<MatchList> {
     const data = await Api.request<MatchList>('/api/items/' + encodeURIComponent(id) + '/matches');
     if (!ResponseGuard.matches(data)) { throw new Error('返回线索格式异常'); }
+    return data;
+  }
+  static async matchAlerts(itemId: string = ''): Promise<MatchAlerts> {
+    const query = itemId ? '?itemId=' + encodeURIComponent(itemId) : '';
+    const data = await Api.request<MatchAlerts>('/api/match-alerts' + query);
+    if (!ResponseGuard.matchAlerts(data) || data.alerts.some((alert: MatchAlert) =>
+      alert.source.owner !== Session.actor || (itemId.length > 0 && alert.source.id !== itemId))) {
+      throw new Error('返回匹配提醒格式异常');
+    }
+    return data;
+  }
+  static async readMatchAlert(id: string): Promise<MatchAlert> {
+    const data = await Api.request<MatchAlert>('/api/match-alerts/' + encodeURIComponent(id) + '/read', '{}');
+    if (!ResponseGuard.matchAlert(data) || data.id !== id || data.unread || data.source.owner !== Session.actor) {
+      throw new Error('返回匹配提醒格式异常');
+    }
     return data;
   }
   static async draft(): Promise<DraftState> {

@@ -44,6 +44,8 @@ export struct PhotoFunnelPage {
         AmbientBackground()
         Column({ space: 10 }) {
         PageHeader({ title: '拍照找物统计', back: true, onBack: () => { this.stack.pop(); } })
+        Scroll() {
+          Column({ space: 12 }) {
         Row({ space: 4 }) {
           ForEach([7, 14, 30], (days: number) => {
             SegmentTab({ label: days + ' 日', selected: this.days === days, onSelect: () => {
@@ -56,19 +58,17 @@ export struct PhotoFunnelPage {
             .fontColor(Colors.muted).width('100%')
         }
         if (this.phase === 'ready') {
-          Scroll() {
-            Column({ space: 12 }) {
               CategoryChart({ title: '拍照找物各阶段', unit: '次', points: this.points() })
               Text('同一次查找在每个阶段最多计一次。只有从该次查找的候选启事发起的申请才计入；寻回以发布者确认交接为准。')
                 .fontSize(12).fontColor(Colors.muted).lineHeight(19).width('100%')
               Button('刷新统计').width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Colors.soft)
                 .fontColor(Colors.green).onClick(() => { this.load(); })
-            }.width('100%')
-          }.layoutWeight(1).align(Alignment.Top)
         } else {
           StatePanel({ phase: this.phase, error: this.error, emptyText: '这段时间还没有完成识别的拍照查找',
-            emptyAction: '刷新统计', onRetry: () => { this.load(); } }).layoutWeight(1)
+            emptyAction: '刷新统计', onRetry: () => { this.load(); } })
         }
+          }.width('100%')
+        }.layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Auto)
         }.width('100%').height('100%').padding({ left: 16, right: 16 })
       }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {

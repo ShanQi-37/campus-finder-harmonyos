@@ -3,24 +3,38 @@ const assert = require('node:assert/strict');
 const { createApp } = require('./server.cjs');
 const { loadEts } = require('./ets-test-loader.cjs');
 
-test('AI 招领建议仅使用识别出的物品名和外观', () => {
-  const { suggestFoundNotice } = loadEts('model/RecognitionDraft.ets');
-  const suggestion = suggestFoundNotice({ category: '生活用品', object: '保温杯', features: [' 绿色 ', '白色贴纸'] });
-  assert.equal(suggestion.title, '拾到保温杯');
-  assert.equal(suggestion.description, '拾到一件保温杯，可见外观：绿色、白色贴纸。');
-  assert.equal(suggestFoundNotice({ category: '生活用品', object: '水杯', features: [] }).description, '');
+test('AI 按启事类型生成标题和可见外观描述', () => {
+  const { suggestNotice } = loadEts('model/RecognitionDraft.ets');
+  const recognition = { category: '生活用品', object: '保温杯', features: [' 绿色 ', '白色贴纸'] };
+  const found = suggestNotice(recognition, 'found');
+  const lost = suggestNotice(recognition, 'lost');
+  assert.equal(found.title, '拾到保温杯');
+  assert.equal(found.description, '拾到一件保温杯，可见外观：绿色、白色贴纸。');
+  assert.equal(lost.title, '寻找保温杯');
+  assert.equal(lost.description, '寻找一件保温杯，可见外观：绿色、白色贴纸。');
+  assert.equal(suggestNotice({ ...recognition, features: [] }, 'lost').description, '');
 });
 
-test('媒体选择器：相机空结果按取消处理并清理临时文件', async () => {
+test('媒体选择器清理相机临时文件并从相册读取视频', async () => {
   const unlinked = [];
   let cameraResult;
   let albumResult;
+  let albumOptions;
+  let openedUri;
+  const videoBytes = [0, 0, 0, 24, 102, 116, 121, 112];
   const { MediaPicker } = loadEts('service/MediaPicker.ets', {
     '@kit.AbilityKit': { common: {} },
     '@kit.CoreFileKit': {
       fileIo: {
         OpenMode: { READ_ONLY: 0, CREATE: 1, WRITE_ONLY: 2 },
-        open: async () => ({ fd: 1 }), close: async () => {}, unlink: async path => { unlinked.push(path); }
+        open: async uri => { openedUri = uri; return { fd: 1 }; },
+        close: async () => {},
+        stat: async () => ({ size: videoBytes.length }),
+        read: async (fd, buffer) => {
+          new Uint8Array(buffer).set(videoBytes);
+          return videoBytes.length;
+        },
+        unlink: async path => { unlinked.push(path); }
       },
       fileUri: { getUriFromPath: path => 'file://' + path }
     },
@@ -31,8 +45,8 @@ test('媒体选择器：相机空结果按取消处理并清理临时文件', as
     },
     '@kit.MediaLibraryKit': { photoAccessHelper: {
       PhotoSelectOptions: class {},
-      PhotoViewMIMETypes: { IMAGE_TYPE: 'image/*' },
-      PhotoViewPicker: class { async select() { return albumResult; } }
+      PhotoViewMIMETypes: { IMAGE_TYPE: 'image/*', VIDEO_TYPE: 'video/*' },
+      PhotoViewPicker: class { async select(options) { albumOptions = options; return albumResult; } }
     } }
   });
   assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, false, false), null);
@@ -45,6 +59,15 @@ test('媒体选择器：相机空结果按取消处理并清理临时文件', as
     albumResult = value;
     assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, false, true), null);
   }
+  assert.equal(albumOptions.MIMEType, 'image/*');
+  assert.equal(await MediaPicker.choose({ cacheDir: '/cache' }, true, true), null);
+  assert.equal(albumOptions.MIMEType, 'video/*');
+  assert.equal(albumOptions.maxSelectNumber, 1);
+  albumResult = { photoUris: ['file://media/Photo/1/cup.mp4'] };
+  const chosen = await MediaPicker.choose({ cacheDir: '/cache' }, true, true);
+  assert.equal(openedUri, albumResult.photoUris[0]);
+  assert.deepEqual(Array.from(new Uint8Array(chosen)), videoBytes);
+  assert.equal(unlinked.length, 2);
 });
 
 test('描述找物重试与详情返回沿用已提交筛选和当前页', async () => {

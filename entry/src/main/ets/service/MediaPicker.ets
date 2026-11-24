@@ -10,7 +10,7 @@ async function readMedia(uri: string, video: boolean): Promise<ArrayBuffer> {
     const size = (await fileIo.stat(file.fd)).size;
     if (size <= 0) { throw new Error('没有读到媒体内容，请重新选择'); }
     if (video) {
-      if (size > 24 * 1024 * 1024) { throw new Error('视频超过 24 MB，请录制更短的视频'); }
+      if (size > 24 * 1024 * 1024) { throw new Error('视频超过 24 MB，请选择或录制更小的视频'); }
       const data = new ArrayBuffer(size);
       let offset = 0;
       while (offset < size) {
@@ -49,12 +49,14 @@ export class MediaPicker {
   static async choose(context: common.UIAbilityContext, video: boolean, fromAlbum: boolean): Promise<ArrayBuffer | null> {
     if (fromAlbum) {
       const options = new photoAccessHelper.PhotoSelectOptions();
-      options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
+      options.MIMEType = video
+        ? photoAccessHelper.PhotoViewMIMETypes.VIDEO_TYPE
+        : photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
       options.maxSelectNumber = 1;
       const result: photoAccessHelper.PhotoSelectResult | null | undefined =
         await new photoAccessHelper.PhotoViewPicker().select(options);
       const uri = result?.photoUris?.[0];
-      return uri ? await readMedia(uri, false) : null;
+      return uri ? await readMedia(uri, video) : null;
     }
     const output = context.cacheDir + '/campus-capture-' + Date.now() + (video ? '.mp4' : '.jpg');
     const file = await fileIo.open(output, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY);

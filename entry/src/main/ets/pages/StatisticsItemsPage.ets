@@ -8,6 +8,7 @@ export struct StatisticsItemsPage {
   @Local model: FeedModel = new FeedModel();
   @Local scope: StatisticsScope = { window: { start: '', end: '' }, category: 'all', status: 'all', dateType: 'published' };
   private stack: NavPathStack = new NavPathStack();
+  private feedScroller: Scroller = new Scroller();
 
   @Builder
   scopeCard() {
@@ -34,10 +35,14 @@ export struct StatisticsItemsPage {
         PageHeader({ title: this.scope.dateType === 'resolved' ? '确认寻回明细' : '统计启事明细',
           subtitle: this.scope.dateType === 'resolved' ? '按实际确认寻回日期筛选' : '按发布日期筛选', back: true,
           onBack: () => { this.stack.pop(); } })
-        Column() { this.scopeCard() }.width('100%').padding({ left: 16, right: 16 })
-        FeedContent({ model: this.model, filters: false,
-          showPublishedDate: this.scope.dateType !== 'resolved', showResolvedDate: this.scope.dateType === 'resolved',
-          onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } }).layoutWeight(1)
+        Scroll(this.feedScroller) {
+          Column({ space: 10 }) {
+            Column() { this.scopeCard() }.width('100%').padding({ left: 16, right: 16 })
+            FeedContent({ model: this.model, filters: false, pageScroller: this.feedScroller,
+              showPublishedDate: this.scope.dateType !== 'resolved', showResolvedDate: this.scope.dateType === 'resolved',
+              onOpen: (id: string) => { this.stack.pushPath({ name: 'Detail', param: id }); } })
+          }.width('100%')
+        }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
         }.width('100%').height('100%')
       }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {

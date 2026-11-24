@@ -1,15 +1,18 @@
 import { CATEGORY_OPTIONS, CATEGORIES, STATUS_OPTIONS, Item } from '../model/Models';
 import { FeedModel } from '../model/FeedModel';
-import { Colors, FontSize, Radius, Spacing, ItemCard, SegmentTab, StatePanel } from './Common';
+import { Colors, FontSize, Radius, Spacing, ItemCard, StatePanel } from './Common';
 
 @ComponentV2
 export struct FeedContent {
   @Param model: FeedModel = new FeedModel();
   @Param filters: boolean = true;
+  @Param searchHeadline: string = '';
   @Param showPublishedDate: boolean = false;
   @Param showResolvedDate: boolean = false;
+  @Param pageScroller: Scroller = new Scroller();
   @Event onOpen: (id: string) => void = () => {};
   @Event onRefresh: () => void = () => {};
+  @Event onOpenSearch: (route: string) => void = () => {};
   @Local filtersOpen: boolean = false;
 
   reset(): void {
@@ -29,23 +32,62 @@ export struct FeedContent {
     }
   }
 
+  turn(delta: number): void {
+    this.pageScroller.scrollEdge(Edge.Top);
+    this.model.turn(delta);
+  }
+
   @Builder
-  searchControls() {
-    Row({ space: Spacing.sm }) {
-      TextInput({ placeholder: '搜索物品或地点', text: this.model.keywordInput }).constraintSize({ minHeight: 44 })
-        .fontSize(FontSize.body).maxLength(80).enterKeyType(EnterKeyType.Search).placeholderColor(Colors.faint)
-        .backgroundColor(Colors.glass).borderRadius(Radius.sm).border({ width: 1, color: Colors.glassStroke }).layoutWeight(1)
-        .accessibilityText('按物品或地点搜索，可用空格分隔多个关键词')
-        .onChange((value: string) => { this.model.keywordInput = value; }).onSubmit(() => { this.model.search(); })
-      Button('搜索').constraintSize({ minWidth: 64, minHeight: 44 }).fontSize(FontSize.body).fontWeight(FontWeight.Bold)
-        .backgroundColor(Colors.green).borderRadius(Radius.sm).onClick(() => { this.model.search(); })
+  findEntry(title: string, icon: Resource, route: string) {
+    Row({ space: 7 }) {
+      Image(icon).width(18).height(18).accessibilityLevel('no')
+      Text(title).fontSize(FontSize.body).fontWeight(FontWeight.Medium).fontColor(Colors.greenDeep)
+    }.layoutWeight(1).constraintSize({ minHeight: 44 }).justifyContent(FlexAlign.Center)
+      .onClick(() => this.onOpenSearch(route)).accessibilityText(title)
+  }
+
+  @Builder
+  searchTools() {
+    Column({ space: Spacing.sm }) {
+      Row({ space: 6 }) {
+        TextInput({ placeholder: '搜索物品或地点', text: this.model.keywordInput })
+          .constraintSize({ minHeight: 46 }).fontSize(FontSize.body).maxLength(80)
+          .enterKeyType(EnterKeyType.Search).placeholderColor(Colors.faint)
+          .backgroundColor(Colors.surface).borderRadius(Radius.sm)
+          .layoutWeight(1).accessibilityText('按物品或地点搜索，可用空格分隔多个关键词')
+          .onChange((value: string) => { this.model.keywordInput = value; }).onSubmit(() => { this.model.search(); })
+        Button('搜索').constraintSize({ minWidth: 64, minHeight: 44 }).fontSize(FontSize.body)
+          .fontWeight(FontWeight.Bold).fontColor('#FFFFFF').backgroundColor(Colors.greenDeep)
+          .borderRadius(Radius.sm).onClick(() => { this.model.search(); })
+      }.width('100%').padding(4).backgroundColor(Colors.surface).borderRadius(14)
+        .border({ width: 1, color: Colors.stroke })
+      Row() {
+        this.findEntry('拍照找物', $r('app.media.icon_camera'), 'PhotoSearch')
+        Divider().vertical(true).height(18).color('#C5D8CF')
+        this.findEntry('描述找物', $r('app.media.icon_describe'), 'TextSearch')
+      }.width('100%').backgroundColor('#E8F2EC').borderRadius(Radius.sm)
+      Text(this.searchHeadline).fontSize(12).fontColor(Colors.muted).width('100%')
+        .padding({ top: 2, left: 2 })
     }.width('100%').padding({ left: Spacing.lg, right: Spacing.lg })
-    Column() {
-      Row({ space: 4 }) {
-        SegmentTab({ label: '全部', selected: this.model.kind === 'all', onSelect: () => this.setKind('all') }).layoutWeight(1)
-        SegmentTab({ label: '寻物启事', selected: this.model.kind === 'lost', onSelect: () => this.setKind('lost') }).layoutWeight(1)
-        SegmentTab({ label: '招领启事', selected: this.model.kind === 'found', onSelect: () => this.setKind('found') }).layoutWeight(1)
-      }.width('100%').backgroundColor(Colors.glass).borderRadius(Radius.md).padding(3)
+  }
+
+  @Builder
+  kindTab(label: string, kind: string) {
+    Column({ space: 7 }) {
+      Text(label).fontSize(FontSize.body).fontWeight(this.model.kind === kind ? FontWeight.Bold : FontWeight.Medium)
+        .fontColor(this.model.kind === kind ? Colors.greenDeep : Colors.muted)
+      Rect().width(24).height(2).radius(1).fill(this.model.kind === kind ? Colors.greenDeep : '#00000000')
+        .accessibilityLevel('no')
+    }.constraintSize({ minHeight: 44 }).layoutWeight(1).justifyContent(FlexAlign.Center)
+      .accessibilitySelected(this.model.kind === kind).onClick(() => this.setKind(kind))
+  }
+
+  @Builder
+  kindTabs() {
+    Row() {
+      this.kindTab('全部', 'all')
+      this.kindTab('寻物启事', 'lost')
+      this.kindTab('招领启事', 'found')
     }.width('100%').padding({ left: Spacing.lg, right: Spacing.lg })
   }
 
@@ -103,18 +145,19 @@ export struct FeedContent {
   pagination() {
     Row({ space: Spacing.sm }) {
       Button('‹ 上一页').constraintSize({ minHeight: 38 }).fontSize(FontSize.caption).fontColor(Colors.greenDeep).backgroundColor(Colors.surface)
-        .enabled(this.model.page > 1).onClick(() => this.model.turn(-1))
+        .enabled(this.model.page > 1).onClick(() => this.turn(-1))
       Text('第 ' + this.model.page + ' 页 · 共 ' + this.model.total + ' 条').fontSize(FontSize.caption).fontColor(Colors.faint)
         .layoutWeight(1).textAlign(TextAlign.Center)
       Button('下一页 ›').constraintSize({ minHeight: 38 }).fontSize(FontSize.caption).fontColor(Colors.greenDeep).backgroundColor(Colors.surface)
-        .enabled(this.model.hasMore).onClick(() => this.model.turn(1))
+        .enabled(this.model.hasMore).onClick(() => this.turn(1))
     }.width('100%').padding({ left: Spacing.lg, right: Spacing.lg, top: 6, bottom: 4 })
   }
 
   build() {
     Column({ space: Spacing.sm }) {
       if (this.filters) {
-        this.searchControls()
+        this.searchTools()
+        this.kindTabs()
         this.filterHeading()
         if (this.filtersOpen) {
           Column() { this.filterOptions() }.width('100%').padding({ left: Spacing.lg, right: Spacing.lg })
@@ -126,18 +169,16 @@ export struct FeedContent {
           emptyAction: this.filters ? '清空筛选' : '刷新信息', onRetry: () => {
             if (this.filters && this.model.phase === 'empty') { this.reset(); }
             else { this.model.load(false); this.onRefresh(); }
-          } }).layoutWeight(1)
+          } }).constraintSize({ minHeight: 144 })
       } else {
-        List({ space: Spacing.sm }) {
+        Column({ space: Spacing.sm }) {
           ForEach(this.model.items, (item: Item) => {
-            ListItem() {
-              ItemCard({ item: item, showPublishedDate: this.showPublishedDate, showResolvedDate: this.showResolvedDate,
-                onOpen: (id: string) => this.onOpen(id) })
-            }
+            ItemCard({ item: item, showPublishedDate: this.showPublishedDate, showResolvedDate: this.showResolvedDate,
+              onOpen: (id: string) => this.onOpen(id) })
           }, (item: Item) => item.id)
-        }.layoutWeight(1).padding({ left: Spacing.lg, right: Spacing.lg, bottom: Spacing.md }).scrollBar(BarState.Auto).width('100%')
+        }.padding({ left: Spacing.lg, right: Spacing.lg }).width('100%')
         if (this.model.hasMore || this.model.page > 1) { this.pagination() }
       }
-    }.width('100%').height('100%')
+    }.width('100%').padding({ bottom: Spacing.md })
   }
 }

@@ -5,6 +5,108 @@ const os = require('node:os');
 const path = require('node:path');
 const { createApp, seed } = require('./server.cjs');
 
+test('注册账号可用两种标识登录，并在重启后保留启事和认领归属', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campusfinder-registration-'));
+  const file = path.join(dir, 'items.json');
+  let server, base;
+  async function start() {
+    server = createApp({ file, delay: 0, requireLogin: true });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    base = 'http://127.0.0.1:' + server.address().port;
+  }
+  const stop = () => new Promise(resolve => {
+    server.close(resolve);
+    server.closeAllConnections();
+  });
+  t.after(async () => { await stop(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const call = async (route, body, token = '') => {
+    const res = await fetch(base + route, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: token ? 'Bearer ' + token : '' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    return { status: res.status, ...(await res.json()) };
+  };
+  const register = body => call('/api/auth/register', body);
+  const login = (method, account, password = 'registered-demo-pass') => call('/api/auth/login', { method, account, password });
+  const input = { phone: '10000000051', student: '20260051', displayName: '注册演示同学', password: 'registered-demo-pass' };
+  await start();
+  assert.equal((await login('phone', input.phone)).status, 401);
+  assert.equal((await register({ password: input.password })).status, 400);
+  assert.equal((await register({ ...input, password: 'short' })).status, 400);
+  assert.equal((await register({ ...input, phone: '10000000001' })).status, 409);
+  assert.equal((await register({ ...input, student: '20260002' })).status, 409);
+  const registered = await register(input);
+  assert.equal(registered.status, 201);
+  const { token, actor, displayName } = registered.data;
+  assert.equal(displayName, input.displayName);
+  assert.deepEqual(Object.keys(registered.data).sort(), ['actor', 'displayName', 'token']);
+  assert.equal((await register({ ...input, student: '20260052' })).status, 409);
+  assert.equal((await register({ ...input, phone: '', student: '20260052' })).status, 201);
+  assert.equal((await login('student', '20260052')).status, 200);
+  assert.equal((await login('phone', input.phone, 'wrong-password')).status, 401);
+  const notice = await call('/api/items', { kind: 'found', category: '学习文具', title: '注册演示笔记本',
+    location: '校园服务台', description: '该笔记本用于演示注册账号的启事归属。', contact: '服务台留言' }, token);
+  assert.equal(notice.status, 201);
+  assert.equal(notice.data.owner, actor);
+  assert.equal(notice.data.ownerName, input.displayName);
+  const claim = await call('/api/items/seed-1/claims',
+    { proof: '校园卡套有可当面核对的虚构标记。', contact: '服务台留言' }, token);
+  assert.equal(claim.status, 201);
+  assert.equal(claim.data.senderName, input.displayName);
+  const stored = fs.readFileSync(file, 'utf8');
+  assert.ok(!stored.includes(input.password));
+  assert.match(JSON.parse(stored).accounts[0].passwordHash, /^[a-f0-9]{128}$/u);
+
+  await stop();
+  await start();
+  const byPhone = await login('phone', input.phone);
+  const byStudent = await login('student', input.student);
+  assert.equal(byPhone.data.actor, actor);
+  assert.equal(byStudent.data.actor, actor);
+  const owned = await call('/api/items?owner=' + actor, undefined, byPhone.data.token);
+  assert.equal(owned.data.items[0].id, notice.data.id);
+  assert.equal(owned.data.items[0].ownerName, input.displayName);
+  const sent = await call('/api/claims?direction=sent', undefined, byStudent.data.token);
+  assert.equal(sent.data.claims[0].id, claim.data.id);
+  assert.equal(sent.data.claims[0].senderName, input.displayName);
+});
+
+test('手机号和学号登录保留原身份，退出使旧会话失效', async t => {
+  const server = createApp({ memory: true, delay: 0, requireLogin: true });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => {
+    server.close(resolve);
+    server.closeAllConnections();
+  }));
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const request = (route, body, headers = {}) => fetch(base + route, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  const login = (method, account, password = 'campus123') => request('/api/auth/login', { method, account, password });
+  assert.equal((await request('/health')).status, 200);
+  assert.equal((await request('/api/items', undefined, { 'X-Demo-User': 'peer-01' })).status, 401);
+  assert.equal((await request('/api/claims/unused/evidence')).status, 401);
+  assert.equal((await login('student', '20260002', 'wrong-password')).status, 401);
+  const phone = await login('phone', '10000000002');
+  assert.equal(phone.status, 200);
+  const primary = (await phone.json()).data;
+  assert.equal(primary.actor, 'peer-01');
+  const student = (await (await login('student', '20260002')).json()).data;
+  assert.equal(student.actor, primary.actor);
+  const original = { Authorization: 'Bearer ' + primary.token, 'X-Demo-User': 'demo-user' };
+  const own = (await (await request('/api/items/seed-1', undefined, original)).json()).data;
+  assert.equal(own.contactVisible, true);
+  const other = (await (await login('student', '20260001')).json()).data;
+  const notOwn = (await (await request('/api/items/seed-1', undefined, { Authorization: 'Bearer ' + other.token })).json()).data;
+  assert.equal(notOwn.contactVisible, false);
+  assert.equal((await request('/api/auth/logout', {}, original)).status, 200);
+  assert.equal((await request('/api/me', undefined, original)).status, 401);
+  assert.equal((await request('/api/me', undefined, { Authorization: 'Bearer ' + student.token })).status, 200);
+});
+
 test('第二版：多角色业务状态机及原子持久化', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campusfinder-workflow-'));
   const file = path.join(dir, 'items.json');

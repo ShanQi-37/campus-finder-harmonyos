@@ -5,6 +5,75 @@ const os = require('node:os');
 const path = require('node:path');
 const { createApp } = require('./server.cjs');
 
+test('先发布寻物，再发布招领，双方收到同一条匹配并各自保存已读状态', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campus-match-alerts-'));
+  const file = path.join(dir, 'store.json');
+  let server;
+  async function start() {
+    server = createApp({ file, delay: 0 });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  }
+  async function call(url, actor, body) {
+    const result = await fetch('http://127.0.0.1:' + server.address().port + url, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Demo-User': actor },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    return { status: result.status, ...(await result.json()) };
+  }
+  const lostActor = 'demo-user', foundActor = 'peer-01', otherActor = 'peer-02';
+  const lost = { title: '寻找白色棒球帽', kind: 'lost', category: '生活用品', location: '东湖食堂',
+    occurredAt: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }),
+    description: '白色棒球帽，帽檐内侧有蓝色印记。', contact: '演示联系方式', requestId: 'alerts-lost' };
+  const found = { ...lost, title: '拾到一顶棒球帽', kind: 'found', location: '东湖食堂一楼', requestId: 'alerts-found' };
+  const alerts = '/api/match-alerts';
+  await start();
+  try {
+    const publishedLost = await call('/api/items', lostActor, lost);
+    assert.equal(publishedLost.status, 201);
+    assert.deepEqual((await call(alerts, lostActor)).data, { alerts: [], unread: 0 });
+    assert.equal((await call('/api/items', lostActor, { ...found, requestId: 'alerts-own' })).status, 201);
+    assert.equal((await call('/api/items', otherActor, { ...found, requestId: 'alerts-other', title: '拾到水壶' })).status, 201);
+    assert.equal((await call('/api/items', otherActor, { ...found, requestId: 'alerts-far', location: '篮球场' })).status, 201);
+    assert.equal((await call(alerts, lostActor)).data.unread, 0);
+
+    const publishedFound = await call('/api/items', foundActor, found);
+    assert.equal(publishedFound.status, 201);
+    assert.equal((await call('/api/items', foundActor, found)).data.id, publishedFound.data.id);
+    const lostAlerts = (await call(alerts, lostActor)).data;
+    assert.equal(lostAlerts.alerts.length, 1);
+    const [match] = lostAlerts.alerts;
+    assert.equal(match.source.id, publishedLost.data.id);
+    assert.equal(match.candidate.id, publishedFound.data.id);
+    assert.equal(match.candidate.contactVisible, false);
+    assert.notEqual(match.candidate.contact, found.contact);
+    assert.deepEqual(match.reasons, ['物品名称相近', '日期相近', '地点相近']);
+    const foundAlerts = (await call(alerts + '?itemId=' + publishedFound.data.id, foundActor)).data;
+    assert.equal(foundAlerts.unread, 1);
+    assert.equal(foundAlerts.alerts[0].id, match.id);
+    assert.equal(foundAlerts.alerts[0].candidate.id, publishedLost.data.id);
+    const detail = alerts + '/' + match.id;
+    assert.equal((await call(detail, otherActor)).status, 404);
+    assert.equal((await call(detail + '/read', otherActor, {})).status, 404);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      assert.equal((await call(detail + '/read', lostActor, {})).data.unread, false);
+    }
+    assert.equal((await call('/api/me', lostActor)).data.unreadMatches, 0);
+    assert.equal((await call('/api/me', foundActor)).data.unreadMatches, 1);
+    await new Promise(resolve => server.close(resolve));
+    await start();
+    assert.equal((await call(detail, lostActor)).data.unread, false);
+    assert.equal((await call(detail, foundActor)).data.unread, true);
+    assert.equal((await call('/api/items/' + publishedFound.data.id + '/withdraw', foundActor, {})).status, 200);
+    assert.equal((await call(detail, lostActor)).status, 404);
+    assert.deepEqual((await call(alerts, lostActor)).data, { alerts: [], unread: 0 });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    assert.ok(path.resolve(dir).startsWith(path.resolve(os.tmpdir()) + path.sep));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('草稿、任务摘要与可解释线索的完整HTTP行为', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'campus-experience-'));
   const file = path.join(dir, 'store.json'); let server, base;

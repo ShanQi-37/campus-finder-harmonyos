@@ -1,4 +1,4 @@
-import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchList, MediaUpload, PersonalSummary,
+import { CATEGORIES, Claim, ClaimList, CountPoint, DraftState, Item, ItemList, MatchAlert, MatchAlerts, MatchList, MediaUpload, PersonalSummary,
   PhotoFunnel, PhotoMatches, PublishInput, Recognition, SearchCriteria, Statistics, TrendPoint } from '../model/Models';
 
 // Check every field used by the UI before accepting an untrusted HTTP payload.
@@ -69,6 +69,7 @@ export class ResponseGuard {
   static claim(claim: Claim): boolean {
     return !!claim && ResponseGuard.strings([claim.id, claim.itemId, claim.itemTitle, claim.sender, claim.owner, claim.senderName, claim.ownerName, claim.proof, claim.contact]) &&
       claim.id.length > 0 && claim.itemId.length > 0 && CATEGORIES.includes(claim.category) && ['lost', 'found'].includes(claim.kind) &&
+      (claim.evidenceType === undefined || (claim.kind === 'found' && ['photo', 'video'].includes(claim.evidenceType))) &&
       ['pending', 'accepted', 'rejected', 'cancelled'].includes(claim.status) && ResponseGuard.time(claim.createdAt) && ResponseGuard.time(claim.updatedAt);
   }
   static claims(data: ClaimList): boolean {
@@ -79,6 +80,15 @@ export class ResponseGuard {
     return !!data && Array.isArray(data.matches) && data.matches.length <= 5 && data.matches.every((lead) => !!lead && ResponseGuard.item(lead.item) &&
       Array.isArray(lead.reasons) && lead.reasons.length > 0 && ResponseGuard.strings(lead.reasons));
   }
+  static matchAlert(data: MatchAlert): boolean {
+    return !!data && typeof data.id === 'string' && /^[a-f0-9]{64}$/.test(data.id) &&
+      ResponseGuard.item(data.source) && ResponseGuard.item(data.candidate) && ResponseGuard.time(data.createdAt) &&
+      typeof data.unread === 'boolean' && Array.isArray(data.reasons) && data.reasons.length > 0 && ResponseGuard.strings(data.reasons);
+  }
+  static matchAlerts(data: MatchAlerts): boolean {
+    return !!data && Array.isArray(data.alerts) && data.alerts.every((alert: MatchAlert) => ResponseGuard.matchAlert(alert)) &&
+      data.unread === data.alerts.filter((alert: MatchAlert) => alert.unread).length;
+  }
   static draft(data: DraftState): boolean {
     return !!data && typeof data.exists === 'boolean' && (data.exists ?
       data.input !== null && ResponseGuard.input(data.input) && ResponseGuard.time(data.updatedAt) : data.input === null && data.updatedAt === '');
@@ -86,7 +96,8 @@ export class ResponseGuard {
   static summary(data: PersonalSummary): boolean {
     return !!data && [data.posted, data.open, data.resolved, data.saved, data.incomingPending, data.outgoingPending].every((value: number) => ResponseGuard.count(value)) &&
       data.open + data.resolved <= data.posted && typeof data.draftTitle === 'string' && typeof data.draftUpdatedAt === 'string' &&
-      (data.draftTitle.length ? ResponseGuard.time(data.draftUpdatedAt) : data.draftUpdatedAt === '');
+      (data.draftTitle.length ? ResponseGuard.time(data.draftUpdatedAt) : data.draftUpdatedAt === '') &&
+      (data.unreadMatches === undefined || ResponseGuard.count(data.unreadMatches));
   }
   static points(points: CountPoint[]): boolean {
     return Array.isArray(points) && points.every((point: CountPoint) => !!point && typeof point.label === 'string' && ResponseGuard.count(point.count));

@@ -8,13 +8,14 @@ import { CategoryChart, RecoveryChart, TrendChart } from '../components/Charts';
 struct StatisticsMetric {
   @Param label: string = '';
   @Param value: number = 0;
+  @Param valueColor: string = Colors.ink;
   @Event onOpen: () => void = () => {};
 
   build() {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 4 }) {
-        Text(this.value.toString()).fontSize(23).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1)
-        Text(this.label + ' ›').fontSize(11).fontColor(Colors.green).maxLines(1)
+        Text(this.value.toString()).fontSize(27).fontWeight(FontWeight.Bold).fontColor(this.valueColor).maxLines(1)
+        Text(this.label + ' ›').fontSize(12).fontColor(Colors.muted).maxLines(1)
       }.width('100%').height('100%').justifyContent(FlexAlign.Center)
     }.width('100%').height('100%').padding(0).backgroundColor(Colors.surface)
       .accessibilityText(this.label + ' ' + this.value + ' 条，查看启事').onClick(() => this.onOpen())
@@ -31,6 +32,7 @@ export struct StatisticsPage {
   @Local category: string = 'all';
   @Local anchor: string = 'today';
   @Local selectedDay: number = 0;
+  @Local filtersExpanded: boolean = false;
   private stack: NavPathStack = new NavPathStack();
   private generation: number = 0;
   async load(): Promise<void> {
@@ -121,21 +123,22 @@ export struct StatisticsPage {
   }
   @Builder
   dashboard() {
-    Scroll() {
       Column({ space: 10 }) {
         Grid() {
           GridItem() {
             StatisticsMetric({ label: '有效启事', value: this.data.total, onOpen: () => this.openItems('all') })
           }
           GridItem() {
-            StatisticsMetric({ label: '已寻回', value: this.data.resolved, onOpen: () => this.openItems('resolved') })
+            StatisticsMetric({ label: '已寻回', value: this.data.resolved, valueColor: Colors.greenDeep,
+              onOpen: () => this.openItems('resolved') })
           }
           GridItem() {
-            StatisticsMetric({ label: '待寻回', value: this.data.open, onOpen: () => this.openItems('open') })
+            StatisticsMetric({ label: '待寻回', value: this.data.open, valueColor: Colors.goldInk,
+              onOpen: () => this.openItems('open') })
           }
-        }.width('100%').height(65).columnsTemplate('1fr 1fr 1fr').rowsTemplate('1fr')
-          .backgroundColor(Colors.glass).borderRadius(14).clip(true)
-          .backdropBlur(20).border({ width: 1, color: Colors.glassStroke })
+        }.width('100%').height(80).columnsTemplate('1fr 1fr 1fr').rowsTemplate('1fr').columnsGap(1)
+          .backgroundColor(Colors.stroke).borderRadius(16).clip(true)
+          .border({ width: 1, color: Colors.glassStroke })
         Column({ space: 4 }) {
           Row({ space: 4 }) {
             SegmentTab({ label: '寻回进度', selected: this.chart === 'overview',
@@ -149,7 +152,7 @@ export struct StatisticsPage {
             SegmentTab({ label: '寻回趋势', selected: this.chart === 'recovery',
               onSelect: () => { this.chart = 'recovery'; this.selectedDay = 0; } }).layoutWeight(1)
           }.width('100%')
-        }.width('100%').backgroundColor(Colors.soft).padding(3).borderRadius(13)
+        }.width('100%')
         if (this.chart === 'overview') { RecoveryChart({ data: this.data }) }
         else if (this.chart === 'category') {
           CategoryChart({ points: this.data.categories, showDetails: true,
@@ -173,7 +176,6 @@ export struct StatisticsPage {
           Text('更新于 ' + new Date(this.data.updatedAt).toLocaleTimeString()).fontSize(11).fontColor(Colors.muted)
         }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 3, top: 4 })
       }.width('100%').padding({ left: 16, right: 16, bottom: 18 })
-    }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
   }
   build() {
     NavDestination() {
@@ -181,23 +183,31 @@ export struct StatisticsPage {
         AmbientBackground()
         Column({ space: 8 }) {
         PageHeader({ title: '校园互助统计', subtitle: '启事发布与寻回数据', back: true, onBack: () => { this.stack.pop(); } })
-        this.controls()
-        Row() {
-          Button('拍照找物统计 ›').fontSize(13).constraintSize({ minHeight: 40 })
-            .fontColor(Colors.green).backgroundColor(Colors.soft)
-            .onClick(() => { this.stack.pushPath({ name: 'PhotoFunnel', param: '' }); })
-        }.width('100%').padding({ left: 16, right: 16 }).justifyContent(FlexAlign.End)
-        if (this.phase === 'ready' || this.phase === 'empty') {
-          Text(this.chart === 'recovery' ?
-            this.data.recoveryWindowStart + ' 至 ' + this.data.recoveryWindowEnd + ' · 按实际确认寻回日期' :
-            this.data.windowStart + ' 至 ' + this.data.windowEnd + ' · 按发布日期')
-            .fontSize(11).fontColor(Colors.muted).width('100%').padding({ left: 16, right: 16 })
-        }
-        if (this.phase !== 'ready') {
-          StatePanel({ phase: this.phase, error: this.error, emptyText: '所选范围暂无有效启事',
-            emptyAction: this.anchor === 'today' ? '查看最近有记录的时段' : (this.category === 'all' ? '刷新统计' : '查看全部分类'),
-            onRetry: () => this.retry() }).layoutWeight(1)
-        } else { this.dashboard() }
+        Scroll() {
+          Column({ space: 8 }) {
+            Row({ space: 8 }) {
+              Button('筛选 · ' + this.days + '日' + (this.filtersExpanded ? '  ∧' : '  ∨'))
+                .fontSize(13).constraintSize({ minHeight: 42 }).layoutWeight(1)
+                .fontColor(Colors.greenDeep).backgroundColor(Colors.surface)
+                .accessibilitySelected(this.filtersExpanded).onClick(() => { this.filtersExpanded = !this.filtersExpanded; })
+              Button('拍照找物统计 ›').fontSize(13).constraintSize({ minHeight: 42 }).layoutWeight(1)
+                .fontColor(Colors.green).backgroundColor(Colors.soft)
+                .onClick(() => { this.stack.pushPath({ name: 'PhotoFunnel', param: '' }); })
+            }.width('100%').padding({ left: 16, right: 16 })
+            if (this.filtersExpanded) { this.controls() }
+            if (this.phase === 'ready' || this.phase === 'empty') {
+              Text(this.chart === 'recovery' ?
+                this.data.recoveryWindowStart + ' 至 ' + this.data.recoveryWindowEnd + ' · 按实际确认寻回日期' :
+                this.data.windowStart + ' 至 ' + this.data.windowEnd + ' · 按发布日期')
+                .fontSize(12).fontColor(Colors.muted).width('100%').padding({ left: 16, right: 16, top: 3, bottom: 3 })
+            }
+            if (this.phase !== 'ready') {
+              StatePanel({ phase: this.phase, error: this.error, emptyText: '所选范围暂无有效启事',
+                emptyAction: this.anchor === 'today' ? '查看最近有记录的时段' : (this.category === 'all' ? '刷新统计' : '查看全部分类'),
+                onRetry: () => this.retry() }).constraintSize({ minHeight: 180 })
+            } else { this.dashboard() }
+          }.width('100%')
+        }.width('100%').layoutWeight(1).scrollBar(BarState.Auto).align(Alignment.Top)
         BottomNav({ active: 'Statistics', onNavigate: (route: string) => this.navigate(route) })
         }.width('100%').height('100%')
       }.width('100%').height('100%')

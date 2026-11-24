@@ -1,7 +1,7 @@
 import { Item, MatchLead, MatchSelection, PhotoCandidate, TimelineEvent, emptyItem } from '../model/Models';
 import { Session } from '../model/Session';
 import { Api } from '../service/Api';
-import { categoryArt, Colors, ItemCard, ItemThumb, NoticeStatus, PageHeader, SegmentTab, StatePanel, AmbientBackground, Shadow } from '../components/Common';
+import { categoryArt, Colors, ItemCard, ItemThumb, NoticeStatus, PageHeader, SegmentTab, StatePanel, AmbientBackground } from '../components/Common';
 @ComponentV2
 export struct DetailPage {
   @Local item: Item = emptyItem();
@@ -60,19 +60,22 @@ export struct DetailPage {
         if (this.phase !== 'ready') {
           StatePanel({ phase: this.phase, error: this.error, onRetry: () => { this.load(); } }).layoutWeight(1)
         } else {
+          Scroll() {
+          Column({ space: 14 }) {
           Column({ space: 8 }) {
             Row({ space: 12 }) {
-              ItemThumb({ item: this.item, w: 78, h: 84, radius: 14 })
+              if (!this.item.mediaId || this.item.status === 'withdrawn' || this.section !== 'info') {
+                ItemThumb({ item: this.item, w: 68, h: 68, radius: 12 })
+              }
               Column({ space: 6 }) {
                 Text((this.item.kind === 'found' ? '招领' : '寻物') + ' · ' + this.item.category)
-                  .fontSize(12).fontColor(Colors.muted).maxLines(1)
+                  .fontSize(12).fontColor(Colors.greenDeep).maxLines(1)
                 Text(this.item.title).fontSize(20).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(3)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                 NoticeStatus({ status: this.item.status })
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             }.width('100%').padding(12).backgroundColor(Colors.glass).borderRadius(16)
-              .backdropBlur(20).border({ width: 1, color: Colors.glassStroke })
-              .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+              .border({ width: 1, color: Colors.glassStroke })
             Row({ space: 4 }) {
               SegmentTab({ label: '物品信息', selected: this.section === 'info',
                 onSelect: () => { this.section = 'info'; } }).layoutWeight(1)
@@ -81,13 +84,11 @@ export struct DetailPage {
               SegmentTab({ label: '相似线索', selected: this.section === 'matches',
                 onSelect: () => { this.loadMatches(); } }).layoutWeight(1)
             }.width('100%').padding(3).borderRadius(13).backgroundColor(Colors.soft)
-          }.width('100%').padding({ left: 16, right: 16 })
-          Scroll() {
-            Column({ space: 14 }) {
+          }.width('100%')
               if (this.section === 'info') {
                 if (this.item.mediaType === 'photo' && this.item.mediaId !== undefined && this.item.status !== 'withdrawn') {
                   Image(Api.mediaUrl(this.item.id, this.item.mediaId)).width('100%').height(220).objectFit(ImageFit.Contain)
-                    .borderRadius(14).backgroundColor(Colors.soft).accessibilityText('物品照片')
+                    .borderRadius(14).backgroundColor(Colors.surface).accessibilityText('物品照片')
                 } else if (this.item.mediaType === 'video' && this.item.mediaId !== undefined && this.item.status !== 'withdrawn') {
                   Video({ src: Api.mediaUrl(this.item.id, this.item.mediaId) }).width('100%').height(220)
                     .controls(true).autoPlay(false).objectFit(ImageFit.Contain).backgroundColor(Colors.ink)
@@ -99,8 +100,7 @@ export struct DetailPage {
                   Divider().color(Colors.stroke)
                   Text(this.item.description).fontSize(14).lineHeight(23).fontColor(Colors.muted).width('100%')
                 }.padding(16).width('100%').backgroundColor(Colors.glass).borderRadius(16)
-                  .backdropBlur(20).border({ width: 1, color: Colors.glassStroke })
-                  .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+                  .border({ width: 1, color: Colors.glassStroke })
                 Column({ space: 7 }) {
                   Text(this.item.contactVisible ? '联系与交接' : '联系指引').fontSize(14).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
                   Text(this.item.contact).fontSize(12).fontColor(Colors.muted).lineHeight(20).width('100%')
@@ -131,7 +131,7 @@ export struct DetailPage {
                       Text(new Date(entry.at).toLocaleString()).fontSize(11).fontColor(Colors.muted)
                     }.alignItems(HorizontalAlign.Start).layoutWeight(1)
                   }.width('100%').padding(15).backgroundColor(Colors.glass).borderRadius(14)
-                    .backdropBlur(20).border({ width: 1, color: Colors.glassStroke })
+                    .border({ width: 1, color: Colors.glassStroke })
                 }, (entry: TimelineEvent) => entry.at + entry.label)
                 Text('仅记录真实操作；当前内容均为虚构演示数据。').fontSize(11).fontColor(Colors.muted).width('100%')
               }
@@ -146,11 +146,11 @@ export struct DetailPage {
                   Button('撤回启事').constraintSize({ minHeight: 34 }).fontSize(12).fontColor(Colors.red).backgroundColor(Colors.redSoft).layoutWeight(1).onClick(() => this.confirm('withdraw'))
                 }.width('100%')
                 Button(this.busy ? '正在保存…' : '确认已寻回').width('100%').constraintSize({ minHeight: 44 }).fontSize(14)
-                  .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+                  .fontColor('#FFFFFF').backgroundColor(Colors.greenDeep)
                   .onClick(() => this.confirm('resolve'))
               } else if (this.item.status === 'withdrawn') {
                 Button('恢复到失物广场').width('100%').constraintSize({ minHeight: 44 }).fontColor('#FFFFFF')
-                  .linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+                  .backgroundColor(Colors.greenDeep)
                   .onClick(() => { this.action('restore'); })
               } else { Text('✓ 已完成交接，感谢你的善意').fontSize(14).fontColor(Colors.green).padding(12) }
             } else {
@@ -159,7 +159,7 @@ export struct DetailPage {
                 Button(this.item.status === 'open' ? (this.item.myPending ? '查看申请进度' :
                   (this.item.kind === 'found' ? '申请认领' : '提供线索')) : '查看申请记录')
                   .constraintSize({ minHeight: 44 }).fontSize(13).fontColor('#FFFFFF').layoutWeight(1)
-                  .linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+                  .backgroundColor(Colors.greenDeep)
                   .onClick(() => {
                     if (this.item.status === 'open' && !this.item.myPending) {
                       this.stack.pushPath({ name: 'ClaimForm', param: this.photoCandidate ?? this.itemId });

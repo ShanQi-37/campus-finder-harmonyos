@@ -1,10 +1,11 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { randomUUID, createHash } = require('node:crypto');
+const { randomUUID, randomBytes, createHash, scryptSync, timingSafeEqual } = require('node:crypto');
 const { ID, MediaError, readUpload, prepareMedia, parseRecognition, createVisionProvider, createSearchInterpreter,
   rankMatches, createMediaStore } = require('./vision.cjs');
 const { searchCriteria, photoFunnel } = require('./search.cjs');
+const { matchAlerts, placeSimilarity } = require('./match-alerts.cjs');
 const CATEGORIES = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 const dateKey = (date = new Date()) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 function isDateKey(value) {
@@ -32,9 +33,16 @@ function seed() {
     return { id: `seed-${i + 1}`, title: r[0], category: r[1], kind: r[2], location: r[3], description: r[4], owner: r[5], status: r[6], contact: '校园服务台转接（演示）', occurredAt: dateKey(created), createdAt: created.toISOString() };
   });
 }
-// Demo identities deliberately model actors, not authentication or production security.
+// Built-in fictional accounts let both sides of the workflow be demonstrated.
 const ACTORS = ['demo-user', 'peer-01', 'peer-02'];
 const names = { 'demo-user': '校园体验同学', 'peer-01': '互助体验同学', 'peer-02': '志愿体验同学' };
+const demoAccounts = [
+  { actor: 'demo-user', phone: '10000000001', student: '20260001' },
+  { actor: 'peer-01', phone: '10000000002', student: '20260002' },
+  { actor: 'peer-02', phone: '10000000003', student: '20260003' }
+];
+const accountPatterns = { phone: /^\d{11}$/u, student: /^\d{6,20}$/u };
+const passwordHash = (password, salt) => scryptSync(password, salt, 64);
 const now = () => new Date().toISOString();
 const event = (label, at = now()) => ({ label, at });
 const RESOLUTION_EVENTS = new Set(['发布者确认寻回', '核对申请通过，确认完成交接']);
@@ -54,8 +62,8 @@ function fingerprint(input) {
   if (input.mediaId) fields.push(input.mediaId);
   return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
-function normalize(item) {
-  const normalized = { ...item, owner: ACTORS.includes(item.owner) ? item.owner : 'peer-01',
+function normalize(item, actorNames) {
+  const normalized = { ...item, owner: actorNames.has(item.owner) ? item.owner : 'peer-01',
     updatedAt: item.updatedAt || item.createdAt, requestId: item.requestId || '', history: item.history || [event('发布启事', item.createdAt)] };
   return { ...normalized, resolvedAt: reliableResolvedAt({ ...normalized, resolvedAt: item.resolvedAt }) };
 }
@@ -107,13 +115,42 @@ function aggregate(items, claims = [], days = 7, category = 'all', reference = n
 function createApp(options = {}) {
   const file = options.file || path.join(__dirname, 'runtime', 'items.json');
   const rawStore = !options.memory && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : seed();
+  const accounts = Array.isArray(rawStore.accounts) ? rawStore.accounts : [];
+  const actorNames = new Map(Object.entries(names));
+  for (const account of accounts) actorNames.set(account.actor, account.displayName);
+  const normalizeItem = item => normalize(item, actorNames);
   // Legacy arrays are migrated without losing any previously published records.
-  let store = Array.isArray(rawStore) ? { version: 2, items: rawStore.map(normalize), claims: [], favorites: [] }
-    : { ...rawStore, version: 2, items: rawStore.items.map(normalize) };
-  store = { ...store, drafts: store.drafts || [], photoSearches: store.photoSearches || [] };
+  let store = Array.isArray(rawStore) ? { version: 2, items: rawStore.map(normalizeItem), claims: [], favorites: [] }
+    : { ...rawStore, version: 2, items: rawStore.items.map(normalizeItem) };
+  store = { ...store, accounts, drafts: store.drafts || [], photoSearches: store.photoSearches || [], matchReads: store.matchReads || [] };
   const mediaStore = createMediaStore(path.join(path.dirname(file), 'media'), options.memory);
+  let indexedItems;
+  const alertCache = new Map();
+  const alertsFor = (items, actor) => {
+    if (fault === 'empty') return [];
+    if (indexedItems !== items) {
+      indexedItems = items;
+      alertCache.clear();
+    }
+    if (!alertCache.has(actor)) {
+      alertCache.set(actor, matchAlerts(items, actor, item => item.mediaId && mediaStore.get(item.owner, item.mediaId)?.recognition));
+    }
+    return alertCache.get(actor);
+  };
+  const evidenceStore = createMediaStore(path.join(path.dirname(file), 'claim-evidence'), options.memory);
   const recognize = options.recognize ?? createVisionProvider(CATEGORIES);
   const interpretSearch = options.interpretSearch ?? createSearchInterpreter(CATEGORIES);
+  const sessions = new Map();
+  const sessionLength = 12 * 60 * 60 * 1000;
+  const issueSession = actor => {
+    const now = Date.now();
+    for (const [key, session] of sessions) {
+      if (session.expires <= now) sessions.delete(key);
+    }
+    const token = randomBytes(32).toString('hex');
+    sessions.set(token, { actor, expires: now + sessionLength });
+    return { token, actor, displayName: actorNames.get(actor) };
+  };
   let activeMedia = 0;
   let fault = 'normal';
   const commit = next => {
@@ -133,7 +170,7 @@ function createApp(options = {}) {
     const accepted = store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'accepted');
     const { requestId, createFingerprint, ...visible } = item;
     return { ...visible, contact: item.owner === actor || accepted ? item.contact : '核对申请通过后可查看联系指引',
-      contactVisible: item.owner === actor || accepted, ownerName: names[item.owner],
+      contactVisible: item.owner === actor || accepted, ownerName: actorNames.get(item.owner),
       saved: store.favorites.some(f => f.actor === actor && f.itemId === item.id),
       myPending: store.claims.some(c => c.itemId === item.id && c.sender === actor && c.status === 'pending'),
       claimCount: store.claims.filter(c => c.itemId === item.id && c.status === 'pending').length };
@@ -144,31 +181,85 @@ function createApp(options = {}) {
     catch { return reply(res, 400, null, '请求地址格式错误'); }
     res.on('finish', () => console.log(JSON.stringify({ time: now(), method: req.method, path: url.pathname, query: url.search, status: res.statusCode, ms: Date.now() - started })));
     try {
-      const actor = req.headers['x-demo-user'] || 'demo-user';
+      const token = /^Bearer ([a-f0-9]{64})$/u.exec(req.headers.authorization || '')?.[1];
+      const session = token && sessions.get(token);
+      const sessionActor = session && session.expires > Date.now() ? session.actor : '';
+      const demoActor = options.requireLogin ? '' : req.headers['x-demo-user'];
+      const actor = sessionActor || demoActor || (options.requireLogin ? '' : 'demo-user');
+      const hasIdentity = Boolean(sessionActor || demoActor);
       const view = item => itemView(item, actor);
-      if (url.pathname.startsWith('/api/') && !ACTORS.includes(actor)) { req.resume(); return reply(res, 400, null, '演示身份无效'); }
-      const mediaPath = /^\/api\/item-media\/([^/]+)\/([^/]+)$/u.exec(url.pathname);
+      const mediaPath = /^\/api\/item-media\/([^/]+)\/([^/]+)(\/cover)?$/u.exec(url.pathname);
+      const publicMedia = mediaPath && ['GET', 'HEAD'].includes(req.method);
+      const isLogin = url.pathname === '/api/auth/login' && req.method === 'POST';
+      const isRegistration = url.pathname === '/api/auth/register' && req.method === 'POST';
+      const validActor = sessionActor ? actorNames.has(sessionActor) : ACTORS.includes(actor);
+      if (url.pathname.startsWith('/api/') && !isLogin && !isRegistration && !publicMedia) {
+        if (!actor) { req.resume(); return reply(res, 401, null, '请先登录拾光校园'); }
+        if (!validActor) { req.resume(); return reply(res, 400, null, '账号身份无效'); }
+      }
+      if (!options.requireLogin && publicMedia && !validActor) {
+        req.resume(); return reply(res, 400, null, '演示身份无效');
+      }
       if (mediaPath && ['GET', 'HEAD'].includes(req.method)) {
-        const item = store.items.find(i => i.id === mediaPath[1] && i.mediaId === mediaPath[2] && i.status !== 'withdrawn');
+        const matchesMedia = i => i.id === mediaPath[1] && i.mediaId === mediaPath[2] && i.status !== 'withdrawn';
+        const item = store.items.find(matchesMedia);
         const asset = item && mediaStore.get(item.owner, item.mediaId);
+        if (mediaPath[3]) {
+          const cover = asset && await mediaStore.cover(item.owner, asset);
+          if (!cover || !store.items.some(matchesMedia)) return reply(res, 404, null, '视频封面不可用');
+          res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': cover.length,
+            'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+          return res.end(req.method === 'HEAD' ? undefined : cover);
+        }
         return asset ? mediaStore.send(req, res, item.owner, asset) : reply(res, 404, null, '附件已不可用');
       }
+      const evidencePath = /^\/api\/claims\/([^/]+)\/evidence$/u.exec(url.pathname);
+      if (evidencePath && ['GET', 'HEAD'].includes(req.method)) {
+        const claim = store.claims.find(c => c.id === evidencePath[1]);
+        const allowed = claim && hasIdentity && (claim.sender === actor || claim.owner === actor);
+        const asset = allowed && evidenceStore.get(claim.sender, claim.evidenceId);
+        return asset && asset.itemId === claim.itemId
+          ? evidenceStore.send(req, res, claim.sender, asset)
+          : reply(res, 404, null, '核对附件不可用');
+      }
       const photoSearch = url.pathname === '/api/media/search';
-      if ((photoSearch || url.pathname === '/api/media') && req.method === 'POST') {
+      const evidenceUpload = /^\/api\/items\/([^/]+)\/claim-evidence$/u.exec(url.pathname);
+      if ((photoSearch || url.pathname === '/api/media' || evidenceUpload) && req.method === 'POST') {
         const type = photoSearch ? 'photo' : url.searchParams.get('type');
-        const analyze = photoSearch || url.searchParams.get('analyze') === 'true';
+        const analyze = photoSearch || (!evidenceUpload && url.searchParams.get('analyze') === 'true');
         if (!['photo', 'video'].includes(type)) { req.resume(); return reply(res, 400, null, '附件类型无效'); }
         if (photoSearch && !recognize) { req.resume(); return reply(res, 503, null, '视觉识别尚未配置，可继续使用关键词搜索'); }
+        let evidenceItem;
+        if (evidenceUpload) {
+          let id;
+          try { id = decodeURIComponent(evidenceUpload[1]); }
+          catch { req.resume(); return reply(res, 400, null, '启事标识格式错误'); }
+          evidenceItem = store.items.find(i => i.id === id && i.kind === 'found' && i.status === 'open' && i.owner !== actor);
+          if (!hasIdentity || !evidenceItem) {
+            req.resume(); return reply(res, 404, null, '当前启事不可添加核对附件');
+          }
+        }
         if (activeMedia >= 2) { req.resume(); return reply(res, 429, null, '媒体服务繁忙，请稍后重试'); }
         activeMedia++;
         try {
-          const { content, frames } = await prepareMedia(await readUpload(req, type), type);
+          const { content, frames } = await prepareMedia(await readUpload(req, type), type, undefined, analyze && !!recognize);
+          if (evidenceItem) {
+            const id = randomUUID();
+            const referenced = new Set(store.claims.filter(c => c.sender === actor).map(c => c.evidenceId));
+            evidenceStore.save(actor, { id, type, itemId: evidenceItem.id, created: Date.now() }, content, referenced);
+            return reply(res, 201, { id, type, recognition: null, analysisStatus: 'skipped' });
+          }
           let recognition = null;
+          let cover;
           let analysisStatus = analyze ? 'unavailable' : 'skipped';
           if (analyze && recognize) {
             try {
-              recognition = parseRecognition(await recognize(frames), CATEGORIES);
+              const result = await recognize(frames, type);
+              recognition = parseRecognition(result, CATEGORIES);
               analysisStatus = recognition.category ? 'recognized' : 'uncertain';
+              if (type === 'video' && analysisStatus === 'recognized') {
+                cover = (Number.isInteger(result.coverFrame) ? frames[result.coverFrame - 1] : undefined) ?? frames[0];
+              }
             } catch { analysisStatus = 'failed'; }
           }
           if (photoSearch) {
@@ -186,7 +277,7 @@ function createApp(options = {}) {
             ...store.items.filter(item => item.owner === actor).map(item => item.mediaId),
             ...store.drafts.filter(draft => draft.actor === actor).map(draft => draft.input.mediaId)
           ]);
-          mediaStore.save(actor, { id, type, recognition, created: Date.now() }, content, referenced);
+          mediaStore.save(actor, { id, type, recognition, created: Date.now() }, content, referenced, cover);
           return reply(res, 201, { id, type, recognition, analysisStatus });
         } catch (error) {
           if (error instanceof MediaError) return reply(res, error.status, null, error.message);
@@ -198,6 +289,49 @@ function createApp(options = {}) {
       let body;
       try { const raw = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)); body = raw ? JSON.parse(raw) : {}; } catch { return reply(res, 400, null, 'JSON或UTF8格式错误'); }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return reply(res, 400, null, '请求体必须为JSON对象');
+      if (isRegistration) {
+        const { phone = '', student = '', displayName = '', password } = body;
+        if ([phone, student, displayName, password].some(value => typeof value !== 'string')) {
+          return reply(res, 400, null, '注册信息格式无效');
+        }
+        const phoneNumber = phone.trim(), studentNumber = student.trim(), nickname = displayName.trim();
+        if ((!phoneNumber && !studentNumber) || (phoneNumber && !accountPatterns.phone.test(phoneNumber)) ||
+            (studentNumber && !accountPatterns.student.test(studentNumber))) {
+          return reply(res, 400, null, '请填写 11 位手机号或 6 至 20 位数字学号');
+        }
+        if (nickname.length > 24 || password.length < 8 || password.length > 64 || !password.trim()) {
+          return reply(res, 400, null, '昵称最多 24 字，密码需为 8 至 64 位');
+        }
+        const duplicate = [...demoAccounts, ...store.accounts].some(account =>
+          (phoneNumber && account.phone === phoneNumber) || (studentNumber && account.student === studentNumber));
+        if (duplicate) return reply(res, 409, null, '该手机号或学号已注册，请返回登录');
+        const salt = randomBytes(16).toString('hex');
+        const account = { actor: randomUUID(), phone: phoneNumber, student: studentNumber,
+          displayName: nickname || '校园同学', salt, passwordHash: passwordHash(password, salt).toString('hex') };
+        commit({ ...store, accounts: [...store.accounts, account] });
+        actorNames.set(account.actor, account.displayName);
+        return reply(res, 201, issueSession(account.actor));
+      }
+      if (isLogin) {
+        if (!['phone', 'student'].includes(body.method) || typeof body.account !== 'string' ||
+            !accountPatterns[body.method].test(body.account.trim()) ||
+            typeof body.password !== 'string' || body.password.length > 64) {
+          return reply(res, 400, null, '请填写有效的登录账号和密码');
+        }
+        const identifier = body.account.trim();
+        const demo = demoAccounts.find(entry => entry[body.method] === identifier);
+        if (demo && body.password === 'campus123') return reply(res, 200, issueSession(demo.actor));
+        const account = store.accounts.find(entry => entry[body.method] === identifier);
+        if (!account || !timingSafeEqual(passwordHash(body.password, account.salt), Buffer.from(account.passwordHash, 'hex'))) {
+          return reply(res, 401, null, '账号或密码不正确');
+        }
+        return reply(res, 200, issueSession(account.actor));
+      }
+      if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
+        if (!sessionActor) return reply(res, 401, null, '登录已失效');
+        sessions.delete(token);
+        return reply(res, 200, { loggedOut: true });
+      }
       if (url.pathname === '/__test/mode' && req.method === 'POST') {
         if (!['normal', 'error', 'empty', 'slow', 'malformed', 'shape'].includes(body.mode)) return reply(res, 400, null, '模式无效');
         fault = body.mode; return reply(res, 200, { mode: fault });
@@ -212,13 +346,13 @@ function createApp(options = {}) {
       if (req.method === 'GET' && fault === 'malformed') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('{invalid'); }
       if (req.method === 'GET' && fault === 'shape') return reply(res, 200, { items: [null], claims: [null], matches: [null], exists: true, input: { requestId: '' } });
       const list = fault === 'empty' ? [] : store.items;
-      const validMedia = () => body.mediaId === undefined || body.mediaId === '' ||
-        (body.kind === 'found' && !!mediaStore.get(actor, body.mediaId));
+      const validMedia = () => body.mediaId === undefined || body.mediaId === '' || !!mediaStore.get(actor, body.mediaId);
       const mediaFields = () => body.mediaId ? { mediaId: body.mediaId, mediaType: mediaStore.get(actor, body.mediaId).type } : {};
       const claimView = claim => {
         const item = store.items.find(i => i.id === claim.itemId);
-        const { photoSearchId, ...visible } = claim;
-        return { ...visible, itemTitle: item.title, kind: item.kind, category: item.category, senderName: names[claim.sender], ownerName: names[claim.owner] };
+        const { photoSearchId, evidenceId, ...visible } = claim;
+        return { ...visible, itemTitle: item.title, kind: item.kind, category: item.category,
+          senderName: actorNames.get(claim.sender), ownerName: actorNames.get(claim.owner) };
       };
       if (url.pathname === '/api/search/interpret' && req.method === 'POST') {
         if (typeof body.query !== 'string' || !body.query.trim() || body.query.trim().length > 160) {
@@ -236,6 +370,28 @@ function createApp(options = {}) {
         if (![7, 14, 30].includes(days)) return reply(res, 400, null, '统计天数无效');
         return reply(res, 200, photoFunnel(fault === 'empty' ? [] : store.photoSearches, store.claims, days, dateKey()));
       }
+      if (url.pathname === '/api/match-alerts' || url.pathname.startsWith('/api/match-alerts/')) {
+        const reads = new Set(store.matchReads.filter(read => read.actor === actor).map(read => read.id));
+        const alerts = alertsFor(list, actor);
+        const alertView = alert => ({ ...alert, source: view(alert.source), candidate: view(alert.candidate), unread: !reads.has(alert.id) });
+        if (url.pathname === '/api/match-alerts' && req.method === 'GET') {
+          const itemId = url.searchParams.get('itemId');
+          const rows = alerts.filter(alert => !itemId || alert.source.id === itemId).map(alertView);
+          return reply(res, 200, { alerts: rows, unread: rows.filter(alert => alert.unread).length });
+        }
+        const route = url.pathname.match(/^\/api\/match-alerts\/([a-f0-9]{64})(\/read)?$/);
+        const alert = route && alerts.find(entry => entry.id === route[1]);
+        if (!alert) return reply(res, 404, null, '这条匹配提醒已失效或不可查看');
+        if (!route[2] && req.method === 'GET') return reply(res, 200, alertView(alert));
+        if (route[2] && req.method === 'POST') {
+          if (!reads.has(alert.id)) {
+            commit({ ...store, matchReads: [...store.matchReads, { actor, id: alert.id }] });
+            reads.add(alert.id);
+          }
+          return reply(res, 200, alertView(alert));
+        }
+        return reply(res, 404, null, '接口不存在');
+      }
       if (url.pathname === '/api/me' && req.method === 'GET') {
         const own = list.filter(i => i.owner === actor), claims = fault === 'empty' ? [] : store.claims;
         const draft = fault === 'empty' ? undefined : store.drafts.find(d => d.actor === actor);
@@ -244,6 +400,7 @@ function createApp(options = {}) {
           saved: list.filter(i => i.status !== 'withdrawn' && store.favorites.some(f => f.actor === actor && f.itemId === i.id)).length,
           incomingPending: claims.filter(c => c.owner === actor && c.status === 'pending').length,
           outgoingPending: claims.filter(c => c.sender === actor && c.status === 'pending').length,
+          unreadMatches: alertsFor(list, actor).filter(alert => !store.matchReads.some(read => read.actor === actor && read.id === alert.id)).length,
           draftTitle: draft ? draft.input.title || '未命名草稿' : '', draftUpdatedAt: draft ? draft.updatedAt : '' });
       }
       if (url.pathname === '/api/draft') {
@@ -286,7 +443,7 @@ function createApp(options = {}) {
         return reply(res, 200, { claims: [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(claimView), pending: rows.filter(c => c.status === 'pending').length });
       }
       if (url.pathname === '/api/items' && req.method === 'GET') {
-        for (const [key, choices] of [['kind', ['all', 'lost', 'found']], ['category', ['all', ...CATEGORIES]], ['status', ['all', 'open', 'resolved', 'withdrawn']], ['owner', ['all', ...ACTORS]], ['sort', ['latest', 'oldest']], ['saved', ['true', 'false']]]) {
+        for (const [key, choices] of [['kind', ['all', 'lost', 'found']], ['category', ['all', ...CATEGORIES]], ['status', ['all', 'open', 'resolved', 'withdrawn']], ['owner', ['all', ...actorNames.keys()]], ['sort', ['latest', 'oldest']], ['saved', ['true', 'false']]]) {
           const value = url.searchParams.get(key);
           if (value && !choices.includes(value)) return reply(res, 400, null, '筛选条件无效');
         }
@@ -375,7 +532,7 @@ function createApp(options = {}) {
           if (drafts.length !== store.drafts.length) commit({ ...store, drafts });
           return reply(res, 201, view(existing));
         }
-        const item = normalize({ ...payload, id: randomUUID(), owner: actor, status: 'open', createdAt: now(), requestId: body.requestId || '', createFingerprint: key });
+        const item = normalizeItem({ ...payload, id: randomUUID(), owner: actor, status: 'open', createdAt: now(), requestId: body.requestId || '', createFingerprint: key });
         commit({ ...store, items: [item, ...store.items], drafts: store.drafts.filter(d => d.actor !== actor || d.input.requestId !== item.requestId) }); return reply(res, 201, view(item));
       }
       const match = url.pathname.match(/^\/api\/items\/([^/]+)(?:\/(resolve|withdraw|restore|update|favorite|claims|matches))?$/);
@@ -389,8 +546,8 @@ function createApp(options = {}) {
           // Explainable rules suggest leads; they never establish ownership or unlock contact details.
           const rows = item.status !== 'open' ? [] : list.filter(i => i.id !== id && i.status === 'open' && i.kind !== item.kind && i.category === item.category && i.owner !== item.owner).map(candidate => {
             const reasons = ['同类物品'], a = item.location.trim(), b = candidate.location.trim(); let rank = 0;
-            if (a === b) { rank += 4; reasons.push('同一地点'); }
-            else if (a.includes(b) || b.includes(a) || Array.from({ length: Math.max(0, a.length - 1) }, (_, index) => a.slice(index, index + 2)).some(part => b.includes(part))) { rank += 2; reasons.push('地点相近'); }
+            const place = placeSimilarity(a, b);
+            if (place) { rank += place; reasons.push(place === 4 ? '同一地点' : '地点相近'); }
             const gap = Math.abs(Date.parse(item.occurredAt) - Date.parse(candidate.occurredAt)) / 86400000;
             if (gap <= 3) { rank += 1; reasons.push('日期相近'); }
             return { item: view(candidate), reasons, rank };
@@ -414,9 +571,16 @@ function createApp(options = {}) {
             !store.photoSearches.some(search => search.id === source && search.actor === actor && search.candidateIds.includes(id)))) {
             return reply(res, 400, null, '此申请的拍照找物来源无效');
           }
+          const evidenceId = body.evidenceId;
+          const evidence = evidenceId !== undefined && evidenceStore.get(actor, evidenceId);
+          if (evidenceId !== undefined && (!hasIdentity || item.kind !== 'found' ||
+            !evidence || evidence.itemId !== id)) {
+            return reply(res, 400, null, '核对附件不可用，请重新添加');
+          }
           const claim = { id: randomUUID(), itemId: id, sender: actor, owner: item.owner, proof: body.proof.trim(),
             contact: body.contact.trim(), status: 'pending', createdAt: now(), updatedAt: now(),
-            ...(source === undefined ? {} : { photoSearchId: source }) };
+            ...(source === undefined ? {} : { photoSearchId: source }),
+            ...(evidence ? { evidenceId, evidenceType: evidence.type } : {}) };
           commit({ ...store, claims: [claim, ...store.claims] }); return reply(res, 201, claimView(claim));
         }
         if (item.owner !== actor) return reply(res, 403, null, '仅可操作本人发布的信息');
@@ -426,7 +590,7 @@ function createApp(options = {}) {
           // Existing claims refer to the original evidence; require withdrawing first if changing type/category.
           if ((body.kind !== item.kind || body.category !== item.category) && store.claims.some(c => c.itemId === id && c.status === 'pending')) return reply(res, 409, null, '已有待核对申请，请先处理后再更改类型或分类');
           const updated = { ...item, ...fields(), updatedAt: now(), history: [...item.history, event('更新物品线索')] };
-          if (body.mediaId === '' || body.kind !== 'found') { delete updated.mediaId; delete updated.mediaType; }
+          if (body.mediaId === '') { delete updated.mediaId; delete updated.mediaType; }
           commit({ ...store, items: store.items.map(i => i.id === id ? updated : i) }); return reply(res, 200, view(updated));
         }
         const target = { resolve: 'resolved', withdraw: 'withdrawn', restore: 'open' }[action];
@@ -463,6 +627,6 @@ function createApp(options = {}) {
 }
 if (require.main === module) {
   const port = Number(process.env.PORT || 4524);
-  createApp({ file: process.env.DATA_FILE }).listen(port, '127.0.0.1', () => console.log(`CampusFinder Mock http://127.0.0.1:${port}`));
+  createApp({ file: process.env.DATA_FILE, requireLogin: true }).listen(port, '127.0.0.1', () => console.log(`CampusFinder Mock http://127.0.0.1:${port}`));
 }
 module.exports = { createApp, aggregate, seed };

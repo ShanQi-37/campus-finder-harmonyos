@@ -1,5 +1,28 @@
-// Fixed fictional roles make both sides of the workflow demonstrable. This is not login.
+export interface LoginSession {
+  token: string;
+  actor: string;
+  displayName: string;
+}
+
 export class Session {
-  static actor: string = 'demo-user';
-  static displayName(): string { return Session.actor === 'demo-user' ? '校园体验同学' : (Session.actor === 'peer-01' ? '互助体验同学' : '志愿体验同学'); }
+  static actor: string = '';
+  static token: string = '';
+  static displayName: string = '';
+  static onExpired: () => void = () => {};
+
+  static start(session: LoginSession): void {
+    Session.actor = session.actor;
+    Session.token = session.token;
+    Session.displayName = session.displayName;
+  }
+
+  static clear(): void {
+    Session.actor = '';
+    Session.token = '';
+    Session.displayName = '';
+  }
+
+  static expire(token: string): void {
+    if (token.length && token === Session.token) { Session.onExpired(); }
+  }
 }

@@ -19,6 +19,15 @@ export struct MatchComparePage {
     this.phase = 'loading';
     this.error = '';
     try {
+      if (this.selection.alertId) {
+        const alert = await Api.readMatchAlert(this.selection.alertId);
+        if (ticket !== this.generation) { return; }
+        this.source = alert.source;
+        this.candidate = alert.candidate;
+        this.reasons = alert.reasons;
+        this.phase = 'ready';
+        return;
+      }
       const result = await Promise.all([
         Api.detail(this.selection.sourceId), Api.matches(this.selection.sourceId)
       ]);
@@ -44,12 +53,14 @@ export struct MatchComparePage {
     Column({ space: 6 }) {
       Text(label + ' · ' + (item.kind === 'found' ? '招领' : '寻物')).fontSize(12)
         .fontColor(Colors.muted).width('100%')
-      ItemThumb({ item: item, w: 44, h: 44, radius: 10 })
+      Row() {
+        ItemThumb({ item: item, w: 96, h: 84, radius: 10 })
+      }.width('100%').padding(4).justifyContent(FlexAlign.Center).backgroundColor(Colors.paper).borderRadius(12)
       Text(item.title).fontSize(16).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
         .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
       NoticeStatus({ status: item.status })
     }.layoutWeight(1).alignItems(HorizontalAlign.Start).padding(10)
-      .backgroundColor(Colors.surface).borderRadius(12)
+      .backgroundColor(Colors.surface).borderRadius(14).border({ width: 1, color: Colors.stroke })
   }
 
   @Builder

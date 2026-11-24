@@ -1,6 +1,7 @@
 import { Claim } from '../model/Models';
 import { Api } from '../service/Api';
-import { categoryArt, claimColor, claimText, Colors, PageHeader, SegmentTab, StatePanel, AmbientBackground, Shadow } from '../components/Common';
+import { categoryArt, claimColor, claimText, Colors, PageHeader, SegmentTab, StatePanel, AmbientBackground } from '../components/Common';
+import { ClaimEvidencePreview } from '../components/ClaimEvidencePreview';
 
 @ComponentV2
 export struct ClaimCenterPage {
@@ -11,6 +12,7 @@ export struct ClaimCenterPage {
   @Local busy: boolean = false;
   @Local resultStatus: string = '';
   @Local claimStatus: string = 'pending';
+  @Local evidenceClaimId: string = '';
   private readonly statuses: string[] = ['all', 'pending', 'accepted', 'rejected', 'cancelled'];
   private readonly statusOptions: SelectOption[] = [{ value: '全部申请' }, { value: '待核对' },
     { value: '已通过' }, { value: '未通过' }, { value: '已取消' }];
@@ -21,6 +23,7 @@ export struct ClaimCenterPage {
   async load(): Promise<void> {
     const ticket = ++this.generation;
     this.phase = 'loading';
+    this.evidenceClaimId = '';
     this.error = '';
     try {
       const result = await Api.claims(this.boxDirection, this.claimStatus);
@@ -169,6 +172,16 @@ export struct ClaimCenterPage {
       }.width('100%').padding(10).backgroundColor(this.statusFill(claim.status)).borderRadius(10)
       Text('核对说明').fontSize(12).fontWeight(FontWeight.Bold).fontColor(Colors.ink).width('100%')
       Text(claim.proof).fontSize(13).lineHeight(21).fontColor(Colors.ink).width('100%')
+      if (claim.evidenceType !== undefined) {
+        Button(this.evidenceClaimId === claim.id ? '收起核对附件' : (claim.evidenceType === 'video' ? '查看核对视频' : '查看核对图片'))
+          .constraintSize({ minHeight: 38 }).fontSize(12).fontColor(Colors.green)
+          .backgroundColor(Colors.soft).width('100%').onClick(() => {
+            this.evidenceClaimId = this.evidenceClaimId === claim.id ? '' : claim.id;
+          })
+        if (this.evidenceClaimId === claim.id) {
+          ClaimEvidencePreview({ claimId: claim.id, mediaType: claim.evidenceType ?? '' })
+        }
+      }
       Column({ space: 4 }) {
         Text('联系指引').fontSize(11).fontColor(Colors.muted).width('100%')
         Text(claim.contact).fontSize(13).lineHeight(20).fontColor(Colors.ink).width('100%')
@@ -187,7 +200,7 @@ export struct ClaimCenterPage {
             Button('不通过').constraintSize({ minHeight: 43 }).fontSize(13).fontColor(Colors.red).backgroundColor(Colors.redSoft)
               .layoutWeight(1).onClick(() => this.confirm(claim, 'reject'))
             Button('确认寻回').constraintSize({ minHeight: 43 }).fontSize(13).fontWeight(FontWeight.Bold)
-              .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+              .fontColor('#FFFFFF').backgroundColor(Colors.greenDeep)
               .layoutWeight(2).onClick(() => this.confirm(claim, 'accept'))
           }.width('100%')
         } else {
@@ -196,8 +209,7 @@ export struct ClaimCenterPage {
         }
       }
     }.padding(13).width('100%').backgroundColor(Colors.glass).borderRadius(16)
-      .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
-      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+      .border({ width: 1, color: Colors.glassStroke })
   }
 
   build() {
@@ -206,23 +218,28 @@ export struct ClaimCenterPage {
         AmbientBackground()
         Column({ space: 8 }) {
         PageHeader({ title: '认领与线索', back: true, onBack: () => this.back() })
-        this.controls()
-        if (this.phase !== 'ready') {
-          StatePanel({ phase: this.phase, error: this.error,
-            emptyText: this.claimStatus === 'pending' ? '暂无待核对申请' : '当前筛选没有申请',
-            emptyAction: this.claimStatus === 'all' ? '刷新信息' : '查看全部申请', onRetry: () => {
-              if (this.phase === 'empty') { this.claimStatus = 'all'; }
-              this.load();
-            } }).layoutWeight(1)
-        } else {
-          if (this.error.length) { Text(this.error).fontSize(12).fontColor(Colors.red).width('90%') }
-          List({ space: 10 }) {
+        List({ space: 10 }) {
+          ListItem() { this.controls() }
+          if (this.phase !== 'ready') {
+            ListItem() {
+              StatePanel({ phase: this.phase, error: this.error,
+                emptyText: this.claimStatus === 'pending' ? '暂无待核对申请' : '当前筛选没有申请',
+                emptyAction: this.claimStatus === 'all' ? '刷新信息' : '查看全部申请', onRetry: () => {
+                  if (this.phase === 'empty') { this.claimStatus = 'all'; }
+                  this.load();
+                } })
+            }
+          } else {
+            if (this.error.length) {
+              ListItem() { Text(this.error).fontSize(12).fontColor(Colors.red).padding({ left: 16, right: 16 }) }
+            }
             ForEach(this.claims, (claim: Claim) => {
-              ListItem() { this.claimCard(claim) }
+              ListItem() {
+                Column() { this.claimCard(claim) }.width('100%').padding({ left: 16, right: 16 })
+              }
             }, (claim: Claim) => claim.id)
-          }.layoutWeight(1).padding({ left: 16, right: 16, bottom: 16 }).width('100%')
-            .enabled(!this.busy).scrollBar(BarState.Auto)
-        }
+          }
+        }.layoutWeight(1).padding({ bottom: 16 }).width('100%').enabled(!this.busy).scrollBar(BarState.Auto)
         }.width('100%').height('100%')
       }.width('100%').height('100%')
     }.hideTitleBar(true).onReady((context: NavDestinationContext) => {
@@ -231,7 +248,7 @@ export struct ClaimCenterPage {
       this.boxDirection = destination === 'sent' || destination === 'sent-history' ? 'sent' : 'received';
       this.claimStatus = destination === 'sent-history' ? 'all' : 'pending';
     }).onShown(() => { this.active = true; this.load(); })
-      .onHidden(() => { this.active = false; this.generation++; })
+      .onHidden(() => { this.active = false; this.generation++; this.evidenceClaimId = ''; })
       .onBackPressed(() => { this.back(); return true; })
   }
 }

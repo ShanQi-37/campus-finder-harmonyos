@@ -12,42 +12,36 @@ import { Api } from '../service/Api';
 /** 颜色令牌：一个品牌绿 + 中性灰阶，其余只作语义点缀。 */
 export class Colors {
   // 品牌主色（唯一的强调色，克制使用）
-  static green: string = '#0E9F6E';
-  static greenDeep: string = '#0B6E4F';
-  static greenSoft: string = '#E8F5EF';   // 浅底强调，只用于选中态/关键点缀
+  static green: string = '#226953';
+  static greenDeep: string = '#175846';
+  static greenSoft: string = '#E0EFE6';   // 浅底强调，只用于选中态/关键点缀
   static soft: string = '#EAF4EE';        // 浅色表面（入口按钮、选中背景）
 
   // 中性灰阶（背景与文字，构成画面主体）
-  static paper: string = '#F7F9F7';       // 页面底色
+  static paper: string = '#F5F8F6';       // 页面底色
   static surface: string = '#FFFFFF';     // 卡片底色
-  static ink: string = '#1F2D28';         // 主文字
-  static muted: string = '#6B7C74';       // 次级文字
-  static faint: string = '#9AA8A1';       // 辅助/占位文字
-  static stroke: string = '#ECF0ED';      // 极淡分隔线（仅用于必要分隔）
+  static ink: string = '#182A23';         // 主文字
+  static muted: string = '#536960';       // 次级文字
+  static faint: string = '#61736B';       // 辅助/占位文字
+  static stroke: string = '#DAE5DF';      // 分隔线及边框
 
   // 语义点缀（只在表达状态/情感时出现，不参与常态配色）
   static gold: string = '#C8890E';
   static goldSoft: string = '#FBF3E3';
   static goldInk: string = '#8A5A0A';
-  static red: string = '#E5484D';
+  static red: string = '#A8343E';
   static redSoft: string = '#FDF0F0';
   static blue: string = '#3B82F6';
   static blueSoft: string = '#EDF4FE';
 
-  // 渐变（hero 与主 CTA）
-  static heroStart: string = '#12A87A';
-  static heroEnd: string = '#0B6E4F';
   static foundFill: string = '#EAF4EE';
   static lostFill: string = '#FBF3E3';
 
-  // 背景氛围（「不背单词」式的柔光渐变，非纯平色）
-  static bgTop: string = '#ECF3EF';       // 顶部淡青绿（更柔和）
-  static bgBottom: string = '#F8F6F0';    // 底部浅米白（更柔和）
-  static bgGlowA: string = '#1FFFFFFF';   // 雾化光斑（淡青，略强化）
-  static bgGlowB: string = '#1AF7E4C8';   // 雾化光斑（淡暖，略强化）
-  // 毛玻璃卡片（半透明白 + 背景模糊）
-  static glass: string = '#B8FFFFFF';     // 半透明卡片底（更通透）
-  static glassStroke: string = '#24FFFFFF'; // 毛玻璃边缘高光
+  static bgTop: string = '#E2F0E8';
+  static bgQuiet: string = '#EDF5F0';
+  static bgBottom: string = '#F8F6F0';
+  static glass: string = '#FFFFFF';
+  static glassStroke: string = '#DDE8E1';
 }
 
 /** 间距令牌：4px 基础节奏，向上倍增。 */
@@ -69,19 +63,13 @@ export class Radius {
 
 /** 字号令牌：五档，覆盖全场景，去除 1px 碎差异。 */
 export class FontSize {
-  static caption: number = 12;  // 辅助说明、时间、标签
+  static caption: number = 13;  // 辅助说明、时间、标签
   static body: number = 14;     // 正文
   static title: number = 16;    // 列表标题、卡片小标题
-  static heading: number = 20;  // 页面大标题、hero
+  static heading: number = 22;  // 页面大标题
   static display: number = 28;  // 数字大屏、关键指标
 }
 
-/** 阴影令牌：三档层级，克制使用（卡片统一用 sm，浮层/悬浮按钮用 md）。 */
-export class Shadow {
-  static sm: string = '#0D1F2D1F';   // 卡片
-  static md: string = '#26201F2D26';  // 悬浮元素
-  static lg: string = '#33201F2D40';  // 弹层
-}
 export function categoryArt(category: string): Resource {
   if (category === '电子数码') { return $r('app.media.category_digital'); }
   if (category === '生活用品') { return $r('app.media.category_life'); }
@@ -89,16 +77,16 @@ export function categoryArt(category: string): Resource {
   return $r('app.media.category_card');
 }
 /**
- * 物品主图：实拍图优先，插画兜底。
- * 有 mediaId（用户上传的照片）时返回可加载的媒体 URL，否则返回 null 走分类插画。
+ * 优先使用已发布的照片或视频封面。
  */
 export function itemPhoto(item: Item): string {
-  if (item.mediaId && item.mediaType === 'photo') { return Api.mediaUrl(item.id, item.mediaId); }
+  if (!item.mediaId || item.status === 'withdrawn') { return ''; }
+  if (item.mediaType === 'photo') { return Api.mediaUrl(item.id, item.mediaId); }
+  if (item.mediaType === 'video') { return Api.mediaCoverUrl(item.id, item.mediaId); }
   return '';
 }
 /**
- * 物品缩略图组件：有实拍照片就显示实物（圆角裁剪），没有则显示分类插画占位。
- * 统一列表卡、详情页、发布预览、认领表单的物品图逻辑。
+ * 列表和详情共用缩略图，媒体不可用时显示分类插画。
  */
 @ComponentV2
 export struct ItemThumb {
@@ -107,15 +95,18 @@ export struct ItemThumb {
   @Param h: number = 68;
   @Param radius: number = 14;
   @Param bg: string = '';
-  photo: string = '';
-  aboutToAppear(): void {
-    this.photo = itemPhoto(this.item);
+  @Local failedPhoto: string = '';
+
+  @Builder
+  mediaThumb(source: string) {
+    Image(source).width(this.w).height(this.h).objectFit(ImageFit.Cover)
+      .borderRadius(this.radius).accessibilityLevel('no')
+      .onError(() => { this.failedPhoto = source; })
   }
+
   build() {
-    if (this.photo.length) {
-      Image(this.photo).width(this.w).height(this.h).objectFit(ImageFit.Cover)
-        .borderRadius(this.radius).accessibilityLevel('no')
-        .onError(() => { this.photo = ''; })
+    if (itemPhoto(this.item).length && this.failedPhoto !== itemPhoto(this.item)) {
+      this.mediaThumb(itemPhoto(this.item))
     } else {
       Image(categoryArt(this.item.category)).width(this.w).height(this.h).objectFit(ImageFit.Contain)
         .backgroundColor(this.bg.length ? this.bg : (this.item.kind === 'found' ? Colors.foundFill : Colors.lostFill))
@@ -136,14 +127,13 @@ export struct PageHeader {
     Row({ space: Spacing.sm }) {
       if (this.back) {
         Button('‹').fontSize(26).fontColor(Colors.ink).backgroundColor('#00000000')
-          .width(40).height(40).borderRadius(Radius.sm).accessibilityText('返回').onClick(() => this.onBack())
+          .width(44).height(44).borderRadius(Radius.sm).accessibilityText('返回').onClick(() => this.onBack())
       }
       Column({ space: 2 }) {
         Text(this.title).fontSize(FontSize.heading).fontWeight(FontWeight.Bold).fontColor(Colors.ink).maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
         if (this.subtitle.length) { Text(this.subtitle).fontSize(FontSize.caption).fontColor(Colors.faint).maxLines(1) }
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Image($r('app.media.app_icon')).width(36).height(36).borderRadius(Radius.sm).accessibilityLevel('no')
     }.width('100%').constraintSize({ minHeight: 60 }).padding({ left: Spacing.lg, right: Spacing.lg, top: Spacing.sm, bottom: Spacing.sm })
   }
 }
@@ -166,11 +156,12 @@ export struct SegmentTab {
   @Param selected: boolean = false;
   @Event onSelect: () => void = () => {};
   build() {
-    Button(this.label).width('100%').constraintSize({ minHeight: 38 }).padding({ left: 3, right: 3, top: 8, bottom: 8 })
+    Button(this.label, { type: ButtonType.ROUNDED_RECTANGLE }).width('100%').constraintSize({ minHeight: 40 })
+      .padding({ left: 4, right: 4, top: 8, bottom: 8 })
       .fontSize(FontSize.caption).fontWeight(this.selected ? FontWeight.Bold : FontWeight.Medium)
-      .fontColor(this.selected ? Colors.ink : Colors.muted)
-      .backgroundColor(this.selected ? Colors.surface : '#00000000').borderRadius(Radius.sm)
-      .shadow(this.selected ? { radius: 4, color: '#0D1F2D14', offsetX: 0, offsetY: 1 } : { radius: 0, color: '#00000000' })
+      .fontColor(this.selected ? Colors.greenDeep : Colors.muted)
+      .backgroundColor(this.selected ? Colors.greenSoft : Colors.surface)
+      .border({ width: 1, color: this.selected ? '#A4C4B5' : Colors.stroke, radius: Radius.sm })
       .accessibilitySelected(this.selected).onClick(() => this.onSelect())
   }
 }
@@ -205,7 +196,7 @@ export struct StatePanel {
             .padding({ left: Spacing.xl, right: Spacing.xl })
         }
         Button(this.phase === 'error' ? '重新加载' : this.emptyAction).constraintSize({ minHeight: 40 }).fontSize(FontSize.body)
-          .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+          .fontColor('#FFFFFF').backgroundColor(Colors.greenDeep)
           .borderRadius(Radius.sm)
           .onClick(() => this.onRetry())
       }
@@ -245,14 +236,15 @@ export struct ItemCard {
   }
   build() {
     Row({ space: Spacing.md }) {
-      ItemThumb({ item: this.item, w: 60, h: 68, radius: Radius.md })
-      Column({ space: 6 }) {
+      ItemThumb({ item: this.item, w: 64, h: 64, radius: Radius.sm })
+      Column({ space: 4 }) {
         Row({ space: 6 }) {
           Text((this.item.kind === 'found' ? '招领' : '寻物') + ' · ' + this.item.category)
-            .fontSize(FontSize.caption).fontColor(Colors.faint).maxLines(1).layoutWeight(1)
+            .fontSize(12).fontColor(this.item.kind === 'found' ? Colors.greenDeep : Colors.muted)
+            .maxLines(1).layoutWeight(1)
           NoticeStatus({ status: this.item.status })
         }.width('100%')
-        Text(this.item.title).fontSize(FontSize.title).fontWeight(FontWeight.Bold).fontColor(Colors.ink)
+        Text(this.item.title).fontSize(FontSize.title).fontWeight(FontWeight.Medium).fontColor(Colors.ink)
           .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
         Row({ space: 5 }) {
           Text(this.item.location + ' · ' + this.itemDate()).fontSize(FontSize.caption).fontColor(Colors.muted)
@@ -260,30 +252,19 @@ export struct ItemCard {
           if (this.item.saved) { Text('★').fontSize(13).fontColor(Colors.green).accessibilityText('已收藏') }
         }.width('100%')
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      Text('›').fontSize(20).fontColor(Colors.faint).accessibilityLevel('no')
-    }.width('100%').padding(Spacing.md).backgroundColor(Colors.glass).borderRadius(Radius.md)
-      .backdropBlur(20).border({ width: 1, color: Colors.glassStroke })
-      .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+    }.width('100%').padding(Spacing.md).backgroundColor(Colors.surface).borderRadius(14)
+      .border({ width: 1, color: '#E5EBE7' })
       .onClick(() => this.onOpen(this.item.id))
       .accessibilityText(this.item.title + '，' + statusText(this.item.status) + '，' + this.item.location)
   }
 }
-/**
- * 氛围背景层：复刻「不背单词」的柔光渐变 + 雾化光斑。
- * 用纵向渐变替代纯平底色，叠两个极淡的雾化光斑营造空间感。
- */
 @ComponentV2
 export struct AmbientBackground {
+  @Param prominent: boolean = false;
+  @Param login: boolean = false;
   build() {
-    Stack() {
-      Column().width('100%').height('100%')
-        .linearGradient({ angle: 180, colors: [[Colors.bgTop, 0.0], [Colors.bgBottom, 1.0]] })
-      Circle().width(280).height(280).fill(Colors.bgGlowA).blur(70)
-        .position({ x: -80, y: 80 })
-      Circle().width(240).height(240).fill(Colors.bgGlowB).blur(70)
-        .position({ x: 240, y: 520 })
-      Circle().width(180).height(180).fill(Colors.bgGlowA).blur(60)
-        .position({ x: -40, y: 780 })
-    }.width('100%').height('100%')
+    Column().width('100%').height('100%')
+      .linearGradient({ angle: 180, colors: [[this.prominent || this.login ? Colors.bgTop : Colors.bgQuiet, 0.0],
+        [Colors.paper, this.login ? 0.56 : (this.prominent ? 0.34 : 0.22)], [Colors.bgBottom, 1.0]] })
   }
 }

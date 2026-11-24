@@ -1,5 +1,5 @@
 import { common } from '@kit.AbilityKit';
-import { Colors, ItemCard, PageHeader, AmbientBackground, Shadow } from '../components/Common';
+import { Colors, ItemCard, PageHeader, AmbientBackground } from '../components/Common';
 import { MatchLead, PhotoCandidate, PhotoMatches } from '../model/Models';
 import { Api } from '../service/Api';
 import { MediaPicker } from '../service/MediaPicker';
@@ -57,13 +57,12 @@ export struct PhotoSearchPage {
                 }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               }.width('100%').alignItems(VerticalAlign.Top)
               Button(this.busy ? '正在处理照片…' : '拍照并查找').width('100%').constraintSize({ minHeight: 46 })
-                .fontColor('#FFFFFF').linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
+                .fontColor('#FFFFFF').backgroundColor(Colors.greenDeep)
                 .enabled(!this.busy).onClick(() => { this.search(false); })
               Button('从相册选照片').width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Colors.soft)
                 .fontColor(Colors.green).enabled(!this.busy).onClick(() => { this.search(true); })
             }.padding(14).width('100%').borderRadius(16).backgroundColor(Colors.glass)
-              .border({ width: 1, color: Colors.glassStroke }).backdropBlur(20)
-              .shadow({ radius: 8, color: Shadow.sm, offsetX: 0, offsetY: 2 })
+              .border({ width: 1, color: Colors.glassStroke })
             if (this.error.length) {
               Text(this.error).fontSize(13).fontColor(Colors.red).width('100%')
             }

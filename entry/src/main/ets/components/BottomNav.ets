@@ -1,4 +1,4 @@
-import { Colors, FontSize, Radius, Shadow, Spacing } from './Common';
+import { Colors, FontSize, Radius, Spacing } from './Common';
 @ComponentV2
 struct NavGlyph {
   @Param route: string = 'Home';
@@ -22,15 +22,12 @@ export struct BottomNav {
   @Event onNavigate: (route: string) => void = () => {};
   @Builder
   tab(label: string, route: string) {
-    Column({ space: 3 }) {
-      Stack() {
-        NavGlyph({ route: route, tint: this.active === route ? Colors.green : Colors.faint })
-      }.width(49).height(28).borderRadius(Radius.sm).backgroundColor(this.active === route ? Colors.soft : '#00000000')
-      .scale({ x: this.active === route ? 1.06 : 1.0, y: this.active === route ? 1.06 : 1.0 })
-      .translate({ y: this.active === route ? -2 : 0 })
-      .animation({ duration: 180, curve: Curve.EaseOut })
-      Text(label).fontSize(11).fontWeight(this.active === route ? FontWeight.Bold : FontWeight.Medium)
+    Column({ space: 2 }) {
+      NavGlyph({ route: route, tint: this.active === route ? Colors.greenDeep : Colors.faint })
+      Text(label).fontSize(12).fontWeight(this.active === route ? FontWeight.Bold : FontWeight.Medium)
         .fontColor(this.active === route ? Colors.greenDeep : Colors.faint)
+      Rect().width(12).height(2).radius(1)
+        .fill(this.active === route ? Colors.greenDeep : '#00000000').accessibilityLevel('no')
     }.layoutWeight(1).constraintSize({ minHeight: 50 }).justifyContent(FlexAlign.Center).onClick(() => this.onNavigate(route))
       .accessibilityText(label).accessibilitySelected(this.active === route)
   }
@@ -41,9 +38,8 @@ export struct BottomNav {
       Row({ space: 2 }) {
         NavGlyph({ route: 'Publish', tint: '#FFFFFF' }).accessibilityLevel('no')
         Text('发布').fontSize(FontSize.caption).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-      }.layoutWeight(1).constraintSize({ minHeight: 44 }).borderRadius(Radius.md)
-        .linearGradient({ angle: 135, colors: [[Colors.heroStart, 0.0], [Colors.heroEnd, 1.0]] })
-        .shadow({ radius: 8, color: Shadow.md, offsetX: 0, offsetY: 3 })
+      }.layoutWeight(1).constraintSize({ minHeight: 44 }).borderRadius(Radius.sm)
+        .backgroundColor(Colors.greenDeep)
         .justifyContent(FlexAlign.Center).onClick(() => this.onNavigate('Publish')).accessibilityText('发布启事')
       this.tab('我的', 'My')
     }.width('100%').padding({ left: Spacing.md, right: Spacing.md, top: 5, bottom: 7 })

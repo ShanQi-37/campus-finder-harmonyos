@@ -18,10 +18,11 @@ export interface Statistics {
   anchor: string; windowStart: string; windowEnd: string; recoveryWindowStart: string; recoveryWindowEnd: string; updatedAt: string;
 }
 export interface PublishInput { title: string; category: string; kind: string; location: string; description: string; contact: string; occurredAt: string; requestId: string; mediaId?: string; mediaType?: string; }
-export interface ClaimInput { proof: string; contact: string; photoSearchId?: string; }
+export interface ClaimInput { proof: string; contact: string; photoSearchId?: string; evidenceId?: string; }
 export interface Claim {
   id: string; itemId: string; itemTitle: string; category: string; kind: string; sender: string; owner: string;
   senderName: string; ownerName: string; proof: string; contact: string; status: string; createdAt: string; updatedAt: string;
+  evidenceType?: string;
 }
 export interface ClaimList { claims: Claim[]; pending: number; }
 export interface MatchLead { item: Item; reasons: string[]; }
@@ -36,9 +37,11 @@ export interface SearchCriteria {
 export interface PhotoFunnel {
   days: number; start: string; end: string; recognized: number; matched: number; applied: number; recovered: number;
 }
-export interface MatchSelection { sourceId: string; candidateId: string; }
+export interface MatchSelection { sourceId: string; candidateId: string; alertId?: string; }
+export interface MatchAlert { id: string; source: Item; candidate: Item; reasons: string[]; createdAt: string; unread: boolean; }
+export interface MatchAlerts { alerts: MatchAlert[]; unread: number; }
 export interface DraftState { exists: boolean; input: PublishInput | null; updatedAt: string; }
-export interface PersonalSummary { posted: number; open: number; resolved: number; saved: number; incomingPending: number; outgoingPending: number; draftTitle: string; draftUpdatedAt: string; }
+export interface PersonalSummary { posted: number; open: number; resolved: number; saved: number; incomingPending: number; outgoingPending: number; draftTitle: string; draftUpdatedAt: string; unreadMatches?: number; }
 export function emptySummary(): PersonalSummary { return { posted: 0, open: 0, resolved: 0, saved: 0, incomingPending: 0, outgoingPending: 0, draftTitle: '', draftUpdatedAt: '' }; }
 export const CATEGORIES: string[] = ['证件卡片', '电子数码', '生活用品', '学习文具'];
 export const CATEGORY_OPTIONS: SelectOption[] = [{ value: '全部分类' }, { value: '证件卡片' }, { value: '电子数码' }, { value: '生活用品' }, { value: '学习文具' }];
